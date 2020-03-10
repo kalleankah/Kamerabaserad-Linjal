@@ -94,7 +94,7 @@ public class MainActivity extends Activity {
         }
     };
 
-    final CameraCaptureSession.StateCallback captureCallbackListener = new CameraCaptureSession.StateCallback() {
+   final CameraCaptureSession.StateCallback captureCallbackListener = new CameraCaptureSession.StateCallback() {
         @Override
         public void onConfigureFailed(@NonNull CameraCaptureSession session) {
             // Do something, I don't know what
