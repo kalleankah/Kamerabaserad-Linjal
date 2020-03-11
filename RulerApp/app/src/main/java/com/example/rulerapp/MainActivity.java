@@ -25,7 +25,7 @@ import androidx.core.app.ActivityCompat;
 import android.os.Handler;
 import android.os.HandlerThread;
 
-import java.util.Arrays;
+import java.util.Collections;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";   // Is only used to log what happens
