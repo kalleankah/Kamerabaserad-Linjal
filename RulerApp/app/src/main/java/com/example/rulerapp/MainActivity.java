@@ -30,7 +30,6 @@ import java.util.Collections;
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";   // Is only used to log what happens
     private TextureView textureView;
-    private String cameraId;
     protected CameraDevice cameraDevice;
     protected CameraCaptureSession cameraCaptureSessions;
     protected CaptureRequest.Builder captureRequestBuilder;
@@ -72,19 +71,19 @@ public class MainActivity extends AppCompatActivity {
 
     private final CameraDevice.StateCallback stateCallback = new CameraDevice.StateCallback() {
         @Override
-        public void onOpened(CameraDevice camera) {
+        public void onOpened(@NonNull CameraDevice camera) {
             //This function gets called when the camera is opened
             Log.e(TAG, "onOpened"); // Write to the console that the camera has been opened
             cameraDevice = camera;  // Set the camera device to the current camera
             createCameraPreview();  // Create the camera preview
         }
         @Override
-        public void onDisconnected(CameraDevice camera) {
+        public void onDisconnected(@NonNull CameraDevice camera) {
             // When disconnected, close the camera device
             cameraDevice.close();
         }
         @Override
-        public void onError(CameraDevice camera, int error) {
+        public void onError(@NonNull CameraDevice camera, int error) {
             // If there's an error, close the camera device and set it to null
             cameraDevice.close();
             cameraDevice = null;
@@ -140,6 +139,7 @@ public class MainActivity extends AppCompatActivity {
         CameraManager manager = (CameraManager) getSystemService(Context.CAMERA_SERVICE);
         Log.e(TAG, "is camera open");
         try {
+            assert manager != null;
             String cameraId = manager.getCameraIdList()[0];
             CameraCharacteristics characteristics = manager.getCameraCharacteristics(cameraId);
             StreamConfigurationMap map = characteristics.get(CameraCharacteristics.SCALER_STREAM_CONFIGURATION_MAP);
