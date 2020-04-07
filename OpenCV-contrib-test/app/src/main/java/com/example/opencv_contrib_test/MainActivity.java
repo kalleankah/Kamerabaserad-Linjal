@@ -64,6 +64,7 @@ public class MainActivity extends AppCompatActivity {
 
         dictionary = getPredefinedDictionary(DICT_6X6_50); // Define which dictionary we use
 
+        // Läs in kameraparametrarna, tyvärr funkar inte detta för vår mobil-modell :'(
         getCameraCharacteristics();
 
         Button buttonLoadImage = (Button) findViewById(R.id.buttonLoadPicture);
@@ -94,9 +95,11 @@ public class MainActivity extends AppCompatActivity {
                 CameraCharacteristics characteristics
                         = manager.getCameraCharacteristics(cameraId);
 
-                float[] lensDistortionCoefficients = characteristics.get(CameraCharacteristics.LENS_INTRINSIC_CALIBRATION);
-                Log.d("Distortion", "Lens distortion coefficients : " + Arrays.toString(lensDistortionCoefficients));
+                // Get the intrinsic calibration parameters for the camera
+                float[] intrinsic = characteristics.get(CameraCharacteristics.LENS_INTRINSIC_CALIBRATION);
+                Log.d("Intrinsic calibration", "Instrinsic parameters : " + Arrays.toString(intrinsic));
 
+                // Get the distortion coefficients for the camera
                 float[] distortion = characteristics.get(CameraCharacteristics.LENS_DISTORTION);
                 Log.d("Distortion", "Lens distortion coefficients : " + Arrays.toString(distortion));
 
@@ -196,22 +199,44 @@ public class MainActivity extends AppCompatActivity {
         if(corners.size() > 0){
             drawDetectedMarkers(outputImage, corners, ids);
 
-            if(corners.size() > 3) {
+            // If there are two (or more) markers in the image, calculate the distance
+            // from middle to middle for the first two markers
+            if(corners.size() > 1) {
+                // For the first marker, get the first three corners.
+                // These are needed for finding the middle of the marker and the length of one side
+                // in pixels, which will give us the pixels to millimeter ratio
                 Mat corner1 = corners.get(0);
                 double[] xy10 = corner1.get(0,0);
                 double[] xy11 = corner1.get(0,1);
                 double[] xy12 = corner1.get(0,2);
-                Mat corner2 = corners.get(3);
-                double[] xy21 = corner2.get(0,1);
-                double[] xy23 = corner2.get(0,3);
 
+                // For the second marker we only need to find the middle and therefore
+                // only take two opposite corners
+                Mat corner2 = corners.get(1);
+                double[] xy21 = corner2.get(0,0);
+                double[] xy23 = corner2.get(0,2);
+
+                // Find the middle point in pixel-coordinates of the first and second marker
                 double[] middle1 = {(xy10[0] + xy12[0])/2, (xy10[1] + xy12[1])/2};
                 double[] middle2 = {(xy21[0] + xy23[0])/2, (xy21[1] + xy23[1])/2};
 
-                double pixel_width = Math.sqrt(Math.pow(xy11[0] - xy10[0], 2) + Math.pow(xy11[1] - xy10[1], 2));
+                // Get the length of one side of the first marker in pixels
+                double marker_length_pixels = Math.sqrt(Math.pow(xy11[0] - xy10[0], 2) + Math.pow(xy11[1] - xy10[1], 2));
 
+                // The length of one side of a marker in mm in reality.
+                // For now this is defined in the code, maybe the user should
+                // be able to write in this value?
+                double marker_length_mm = 45;
+
+                // Get the ratio from pixels to millimeters
+                double pixels_to_mm_ratio = marker_length_mm / marker_length_pixels;
+
+                // Calculate the distance in pixels between the middles of the two markers
                 double distance = Math.sqrt(Math.pow(middle2[0] - middle1[0], 2) + Math.pow(middle2[1] - middle1[1], 2));
-                double distanceIn_mm = distance*50/pixel_width;
+
+                // Convert the distance from pixels into millimeters
+                double distanceIn_mm = distance*pixels_to_mm_ratio;
+
                 //Toast.makeText(getApplicationContext(), "1: " + id1[0] + " 2: " + id2[0],Toast.LENGTH_SHORT).show();
                 Toast.makeText(getApplicationContext(),"The distance is " + distanceIn_mm,Toast.LENGTH_SHORT).show();
             }
