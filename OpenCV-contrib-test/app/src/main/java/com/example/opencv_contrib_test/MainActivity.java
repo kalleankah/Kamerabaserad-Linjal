@@ -10,6 +10,7 @@ import android.graphics.BitmapFactory;
 import android.hardware.camera2.CameraAccessException;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
+import android.hardware.camera2.params.StreamConfigurationMap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
@@ -81,22 +82,23 @@ public class MainActivity extends AppCompatActivity {
 
     /* Funktion för att få ut kameraparametrarna som behövs för att få 3D-koordinater */
     private void getCameraCharacteristics() {
+        //Activity activity = getActivity();
         Activity activity = this;
         CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
+        if(manager == null) {
+            Log.d("manager", "Manager is null");
+        }
         try {
             assert manager != null;
             for (String cameraId : manager.getCameraIdList()) {
                 CameraCharacteristics characteristics
                         = manager.getCameraCharacteristics(cameraId);
 
-                // We don't use a front facing camera in this sample.
-                Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
-                if(facing == null){
-                    Log.d("Lens error", "Facing: NULL");
-                }
-
-                float[] lensDistortionCoefficients = characteristics.get(CameraCharacteristics.LENS_DISTORTION);
+                float[] lensDistortionCoefficients = characteristics.get(CameraCharacteristics.LENS_INTRINSIC_CALIBRATION);
                 Log.d("Distortion", "Lens distortion coefficients : " + Arrays.toString(lensDistortionCoefficients));
+
+                float[] distortion = characteristics.get(CameraCharacteristics.LENS_DISTORTION);
+                Log.d("Distortion", "Lens distortion coefficients : " + Arrays.toString(distortion));
 
             }
         } catch (CameraAccessException e) {
