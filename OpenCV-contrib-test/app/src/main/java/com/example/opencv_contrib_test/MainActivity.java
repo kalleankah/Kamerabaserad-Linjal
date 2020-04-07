@@ -2,9 +2,14 @@ package com.example.opencv_contrib_test;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.hardware.camera2.CameraAccessException;
+import android.hardware.camera2.CameraCharacteristics;
+import android.hardware.camera2.CameraManager;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
@@ -25,14 +30,14 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
-import static org.opencv.aruco.Aruco.DICT_6X6_250;
+import static org.opencv.aruco.Aruco.DICT_6X6_50;
 import static org.opencv.aruco.Aruco.detectMarkers;
 import static org.opencv.aruco.Aruco.drawDetectedMarkers;
 import static org.opencv.aruco.Aruco.drawMarker;
 import static org.opencv.aruco.Aruco.getPredefinedDictionary;
-import static org.opencv.imgcodecs.Imgcodecs.imwrite;
 import static org.opencv.imgproc.Imgproc.COLOR_BGRA2BGR;
 import static org.opencv.imgproc.Imgproc.cvtColor;
 
@@ -40,9 +45,7 @@ public class MainActivity extends AppCompatActivity {
 
     Dictionary dictionary;
     ImageView imgView;
-    Button button;
     private static final int PICK_IMAGE = 100;
-    private static int RESULT_LOAD_IMAGE = 1;
     Uri imageUri;
 
     @Override
@@ -58,7 +61,9 @@ public class MainActivity extends AppCompatActivity {
 
         imgView = (ImageView) findViewById(R.id.imgView);   // Find ImageView component
 
-        dictionary = getPredefinedDictionary(DICT_6X6_250); // Define which dictionary we use
+        dictionary = getPredefinedDictionary(DICT_6X6_50); // Define which dictionary we use
+
+        getCameraCharacteristics();
 
         Button buttonLoadImage = (Button) findViewById(R.id.buttonLoadPicture);
         buttonLoadImage.setOnClickListener(new View.OnClickListener() {
@@ -72,6 +77,31 @@ public class MainActivity extends AppCompatActivity {
 
         //Mat image = createMarker();                       // Create a marker
         //displayMarker(image);                             // Display an image
+    }
+
+    /* Funktion för att få ut kameraparametrarna som behövs för att få 3D-koordinater */
+    private void getCameraCharacteristics() {
+        Activity activity = this;
+        CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
+        try {
+            assert manager != null;
+            for (String cameraId : manager.getCameraIdList()) {
+                CameraCharacteristics characteristics
+                        = manager.getCameraCharacteristics(cameraId);
+
+                // We don't use a front facing camera in this sample.
+                Integer facing = characteristics.get(CameraCharacteristics.LENS_FACING);
+                if(facing == null){
+                    Log.d("Lens error", "Facing: NULL");
+                }
+
+                float[] lensDistortionCoefficients = characteristics.get(CameraCharacteristics.LENS_DISTORTION);
+                Log.d("Distortion", "Lens distortion coefficients : " + Arrays.toString(lensDistortionCoefficients));
+
+            }
+        } catch (CameraAccessException e) {
+            e.printStackTrace();
+        }
     }
 
     // Function that allows the user to choose an image from the gallery
@@ -157,23 +187,30 @@ public class MainActivity extends AppCompatActivity {
         // This might not be necessary but is maybe a good practice???
         Mat outputImage = image.clone();
 
-        double[] id = ids.get(0,0);
+        double[] id1 = ids.get(0,0);
+        double[] id2 = ids.get(3,0);
 
         // If any markers have been detected, draw the square around it and store it in outputImage
         if(corners.size() > 0){
             drawDetectedMarkers(outputImage, corners, ids);
 
-            if(corners.size() == 2) {
+            if(corners.size() > 3) {
                 Mat corner1 = corners.get(0);
-                double[] xy1 = corner1.get(0,0);
-                double[] xy3 = corner1.get(0,1);
-                Mat corner2 = corners.get(1);
-                double[] xy2 = corner2.get(0,3);
+                double[] xy10 = corner1.get(0,0);
+                double[] xy11 = corner1.get(0,1);
+                double[] xy12 = corner1.get(0,2);
+                Mat corner2 = corners.get(3);
+                double[] xy21 = corner2.get(0,1);
+                double[] xy23 = corner2.get(0,3);
 
-                double pixel_width = Math.sqrt(Math.pow(xy3[0] - xy1[0], 2) + Math.pow(xy3[1] - xy1[1], 2));
+                double[] middle1 = {(xy10[0] + xy12[0])/2, (xy10[1] + xy12[1])/2};
+                double[] middle2 = {(xy21[0] + xy23[0])/2, (xy21[1] + xy23[1])/2};
 
-                double distance = Math.sqrt(Math.pow(xy2[0] - xy1[0], 2) + Math.pow(xy2[1] - xy1[1], 2));
-                double distanceIn_mm = distance*45/pixel_width;
+                double pixel_width = Math.sqrt(Math.pow(xy11[0] - xy10[0], 2) + Math.pow(xy11[1] - xy10[1], 2));
+
+                double distance = Math.sqrt(Math.pow(middle2[0] - middle1[0], 2) + Math.pow(middle2[1] - middle1[1], 2));
+                double distanceIn_mm = distance*50/pixel_width;
+                //Toast.makeText(getApplicationContext(), "1: " + id1[0] + " 2: " + id2[0],Toast.LENGTH_SHORT).show();
                 Toast.makeText(getApplicationContext(),"The distance is " + distanceIn_mm,Toast.LENGTH_SHORT).show();
             }
         }
