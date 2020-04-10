@@ -20,6 +20,10 @@ android {
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
+    compileOptions {
+        sourceCompatibility = 1.8
+        targetCompatibility = 1.8
+    }
 
 }
 
@@ -37,11 +41,11 @@ dependencies {
 
     // CameraX core library using the camera2 implementation
     def camerax_version = "1.0.0-beta01"
+    implementation "androidx.camera:camera-core:${camerax_version}"
     implementation "androidx.camera:camera-camera2:${camerax_version}"
+    implementation "androidx.camera:camera-lifecycle:${camerax_version}"
     // If you want to use the CameraX View class
     implementation "androidx.camera:camera-view:1.0.0-alpha08"
     // If you want to use the CameraX Extensions library
     implementation "androidx.camera:camera-extensions:1.0.0-alpha08"
-    // If you want to use the CameraX Lifecycle library
-    implementation "androidx.camera:camera-lifecycle:${camerax_version}"
 }

@@ -1,35 +1,46 @@
 package com.example.cameraxopengl;
 
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.camera.core.CameraSelector;
-import androidx.camera.core.CameraX;
-import androidx.camera.core.ImageAnalysis;
-import androidx.camera.core.UseCase;
-import androidx.core.app.ActivityCompat;
-import androidx.core.content.ContextCompat;
-
 import android.Manifest;
+import android.annotation.SuppressLint;
 import android.content.pm.PackageManager;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.util.Log;
+import android.util.Size;
+
+import androidx.annotation.NonNull;
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.camera.camera2.Camera2Config;
+import androidx.camera.core.AspectRatio;
+import androidx.camera.core.CameraSelector;
+import androidx.camera.core.CameraX;
+import androidx.camera.core.CameraXConfig;
+import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.UseCase;
+import androidx.camera.lifecycle.ProcessCameraProvider;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
+
+import com.google.common.util.concurrent.ListenableFuture;
 
 import org.opencv.android.OpenCVLoader;
 
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
-public class MainActivity extends AppCompatActivity {
-    private Executor executor;
+public class MainActivity extends AppCompatActivity implements CameraXConfig.Provider {
+    ListenableFuture<ProcessCameraProvider> cameraProviderFuture;
+    private Executor executor = Executors.newSingleThreadExecutor();
     private GLRenderer renderer;
+    private GLSurfaceView glSurfaceView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        executor = Executors.newSingleThreadExecutor();
-        GLSurfaceView glSurfaceView = findViewById(R.id.glsurfaceview);
+        glSurfaceView = findViewById(R.id.glsurfaceview);
         renderer = new GLRenderer(glSurfaceView);
         glSurfaceView.setPreserveEGLContextOnPause(true);
         glSurfaceView.setEGLContextClientVersion(2);
@@ -38,7 +49,8 @@ public class MainActivity extends AppCompatActivity {
 
         checkCameraPermission();
         loadOpenCV();
-        startCamera();
+
+        glSurfaceView.post(() -> startCamera());
     }
 
     private void checkCameraPermission() {
@@ -70,16 +82,31 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void startCamera() {
-        CameraX.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, imageAnalyzer());
-    }
+        cameraProviderFuture = ProcessCameraProvider.getInstance(this);
 
-    private UseCase imageAnalyzer() {
         ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+                .setTargetResolution(new Size(1920, 1080))
+//                .setTargetAspectRatio(AspectRatio.RATIO_16_9)
                 .build();
 
         imageAnalysis.setAnalyzer(executor, renderer);
 
-        return imageAnalysis;
+        cameraProviderFuture.addListener(() -> {
+            ProcessCameraProvider cameraProvider = null;
+            try {
+                cameraProvider = cameraProviderFuture.get();
+            } catch (ExecutionException | InterruptedException e) {
+                e.printStackTrace();
+            }
+            assert cameraProvider != null;
+            cameraProvider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, imageAnalysis);
+        }, ContextCompat.getMainExecutor(this));
+    }
+
+    @NonNull
+    @Override
+    public CameraXConfig getCameraXConfig() {
+        return Camera2Config.defaultConfig();
     }
 }

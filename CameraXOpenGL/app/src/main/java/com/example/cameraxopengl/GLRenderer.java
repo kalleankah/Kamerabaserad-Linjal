@@ -24,7 +24,7 @@ import javax.microedition.khronos.opengles.GL10;
 
 class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
     private GLSurfaceView glSurfaceView;
-    private int[] textures;
+    private int[] textures = {0, 0};
     private EffectContext effectContext;
     private Bitmap image;
     private Square square;
@@ -34,7 +34,10 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
     }
 
     @Override
-    public void onSurfaceCreated(GL10 gl, EGLConfig config) {}
+    public void onSurfaceCreated(GL10 gl, EGLConfig config) {
+        Bitmap.Config conf = Bitmap.Config.ARGB_8888; // see other conf types
+        image = Bitmap.createBitmap(1, 1, conf);
+    }
 
     @Override
     public void onSurfaceChanged(GL10 gl, int width, int height) {
@@ -59,10 +62,12 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
     @Override
     public void analyze(@NonNull ImageProxy image) {
         Bitmap b = toBitmap(image);
-        Bitmap bm = Bitmap.createBitmap(b, 0, 0, b.getWidth(), b.getHeight());
-        setImage(bm);
+//        Bitmap bm = Bitmap.createBitmap(b, 0, 0, b.getWidth(), b.getHeight());
+        setImage(b);
 
         glSurfaceView.requestRender();
+
+        image.close();
     }
 
     private synchronized void setImage (Bitmap frame){
