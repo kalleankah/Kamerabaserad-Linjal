@@ -1,6 +1,7 @@
 package com.example.cameraxopengl;
 
 import android.opengl.GLES20;
+import android.util.Log;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -52,6 +53,7 @@ class Square {
         textureBuffer.position(0);
     }
 
+    // Initialize shader program with the content in the shader string variables
     private void initializeProgram() {
         vertexShader = GLES20.glCreateShader(GLES20.GL_VERTEX_SHADER);
         GLES20.glShaderSource(vertexShader, vertexShaderCode);
@@ -68,6 +70,7 @@ class Square {
         GLES20.glLinkProgram(program);
     }
 
+    // Draw preview onto texture unit "texture"
     void draw(int texture) {
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         GLES20.glUseProgram(program);
