@@ -78,7 +78,7 @@ public class MainActivity extends AppCompatActivity {
 
         ImageAnalysis imageAnalysis = new ImageAnalysis.Builder()
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .setTargetResolution(new Size(1280, 720))
+                .setTargetResolution(new Size(1920, 1080))
                 .build();
 
         imageAnalysis.setAnalyzer(Executors.newSingleThreadExecutor(), renderer);

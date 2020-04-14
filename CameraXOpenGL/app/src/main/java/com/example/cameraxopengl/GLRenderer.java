@@ -49,6 +49,7 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
         renderTexture();
 
         square.draw(textures[0]);
+        square.drawGeometry(textures[0]);
     }
 
     @Override
