@@ -2,15 +2,9 @@ package com.example.opencv_contrib_test;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import android.app.Activity;
-import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.hardware.camera2.CameraAccessException;
-import android.hardware.camera2.CameraCharacteristics;
-import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.params.StreamConfigurationMap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
@@ -31,14 +25,17 @@ import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import static org.opencv.aruco.Aruco.DICT_6X6_50;
 import static org.opencv.aruco.Aruco.detectMarkers;
+import static org.opencv.aruco.Aruco.drawAxis;
 import static org.opencv.aruco.Aruco.drawDetectedMarkers;
 import static org.opencv.aruco.Aruco.drawMarker;
+import static org.opencv.aruco.Aruco.estimatePoseSingleMarkers;
 import static org.opencv.aruco.Aruco.getPredefinedDictionary;
+import static org.opencv.calib3d.Calib3d.Rodrigues;
+import static org.opencv.calib3d.Calib3d.drawFrameAxes;
 import static org.opencv.imgproc.Imgproc.COLOR_BGRA2BGR;
 import static org.opencv.imgproc.Imgproc.cvtColor;
 
@@ -48,6 +45,8 @@ public class MainActivity extends AppCompatActivity {
     ImageView imgView;
     private static final int PICK_IMAGE = 100;
     Uri imageUri;
+    Mat cameraMatrix;
+    Mat distCoeff;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -64,8 +63,20 @@ public class MainActivity extends AppCompatActivity {
 
         dictionary = getPredefinedDictionary(DICT_6X6_50); // Define which dictionary we use
 
-        // Läs in kameraparametrarna, tyvärr funkar inte detta för vår mobil-modell :'(
-        getCameraCharacteristics();
+        // Skapa kamera-matrisen
+        cameraMatrix = new Mat(3,3, CvType.CV_32F);
+
+        // Följande värden är alternativa värden för kameramatrisen som vi testat,
+        // men det är troligen de som är nu som är rätt för våra telefoner
+        // 349.3601,0,258.0883,0,349.7267,210.5905,0,0,1
+        // 1365.8452f, 0, 957.5208f, 0, 1364.1266f, 539.8947f, 0, 0, 1
+        float[] intrinsics = { 455.28177f, 0, 318.84027f, 0, 454.70886f, 239.63158f, 0, 0, 1};
+        cameraMatrix.put(0, 0, intrinsics);
+
+        // Skapa matrisen med distortionskoefficienterna
+        distCoeff = new Mat(1,5, CvType.CV_32F);
+        float[] distortion = {8.4e-03f, -1.6e-01f ,1.4e-03f, -3.9e-03f, 1.3e-01f};
+        distCoeff.put(0, 0, distortion);
 
         Button buttonLoadImage = (Button) findViewById(R.id.buttonLoadPicture);
         buttonLoadImage.setOnClickListener(new View.OnClickListener() {
@@ -76,37 +87,8 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-
         //Mat image = createMarker();                       // Create a marker
         //displayMarker(image);                             // Display an image
-    }
-
-    /* Funktion för att få ut kameraparametrarna som behövs för att få 3D-koordinater */
-    private void getCameraCharacteristics() {
-        //Activity activity = getActivity();
-        Activity activity = this;
-        CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
-        if(manager == null) {
-            Log.d("manager", "Manager is null");
-        }
-        try {
-            assert manager != null;
-            for (String cameraId : manager.getCameraIdList()) {
-                CameraCharacteristics characteristics
-                        = manager.getCameraCharacteristics(cameraId);
-
-                // Get the intrinsic calibration parameters for the camera
-                float[] intrinsic = characteristics.get(CameraCharacteristics.LENS_INTRINSIC_CALIBRATION);
-                Log.d("Intrinsic calibration", "Instrinsic parameters : " + Arrays.toString(intrinsic));
-
-                // Get the distortion coefficients for the camera
-                float[] distortion = characteristics.get(CameraCharacteristics.LENS_DISTORTION);
-                Log.d("Distortion", "Lens distortion coefficients : " + Arrays.toString(distortion));
-
-            }
-        } catch (CameraAccessException e) {
-            e.printStackTrace();
-        }
     }
 
     // Function that allows the user to choose an image from the gallery
@@ -155,7 +137,7 @@ public class MainActivity extends AppCompatActivity {
         imgView.setImageBitmap(result);     // Put the image in the ImageView
     }
 
-
+    // This function is currently called OnActivityResult() which is called from selectImage()
     private void detectMarker(Bitmap bitmap) throws FileNotFoundException {
 
         // Create a Mat and copy the input Bitmap into it
@@ -197,11 +179,48 @@ public class MainActivity extends AppCompatActivity {
 
         // If any markers have been detected, draw the square around it and store it in outputImage
         if(corners.size() > 0){
-            drawDetectedMarkers(outputImage, corners, ids);
+            //drawDetectedMarkers(outputImage, corners, ids);
+
+            // The length of one side of a marker in mm in reality.
+            // For now this is defined in the code, maybe the user should
+            // be able to write in this value?
+            float marker_length_m = 0.04f;
+
+            // Create empty matrices for the rotation vector and the translation vector
+            Mat rvecs = new Mat();
+            Mat tvecs = new Mat();
+
+            // Estimate pose and get rvecs and tvecs
+            estimatePoseSingleMarkers(corners, marker_length_m, cameraMatrix, distCoeff, rvecs, tvecs);
+
+            // If there was only one marker, get the Rodrigues form of rvecs and draw axis
+            if(corners.size() == 1) {
+                Mat R = new Mat(3,3,CvType.CV_32F);
+                Rodrigues(rvecs, R);
+
+                drawAxis(outputImage, cameraMatrix, distCoeff, R, tvecs, 0.01f);
+            }
 
             // If there are two (or more) markers in the image, calculate the distance
             // from middle to middle for the first two markers
             if(corners.size() > 1) {
+
+                //Create empty matrices to fill
+                Mat rvec = new Mat(1,1, CvType.CV_64FC3);
+                Mat tvec = new Mat(1,1, CvType.CV_64FC3);
+                Mat R = new Mat(3,3,CvType.CV_64F);
+
+                // When there are than one markers in the image, another row is added to rvecs and
+                // tvecs for each marker. Therefore, we need to take out and draw the axes for one
+                // marker, or one row, at the time.
+                for(int i = 0; i < corners.size(); i++) {
+                    rvec.put(0,0, rvecs.get(i,0));
+                    tvec.put(0,0, tvecs.get(i,0));
+                    Rodrigues(rvec, R);
+
+                    drawFrameAxes(outputImage, cameraMatrix, distCoeff, R, tvec, 0.01f, 5);
+                }
+
                 // For the first marker, get the first three corners.
                 // These are needed for finding the middle of the marker and the length of one side
                 // in pixels, which will give us the pixels to millimeter ratio
@@ -223,13 +242,8 @@ public class MainActivity extends AppCompatActivity {
                 // Get the length of one side of the first marker in pixels
                 double marker_length_pixels = Math.sqrt(Math.pow(xy11[0] - xy10[0], 2) + Math.pow(xy11[1] - xy10[1], 2));
 
-                // The length of one side of a marker in mm in reality.
-                // For now this is defined in the code, maybe the user should
-                // be able to write in this value?
-                double marker_length_mm = 45;
-
                 // Get the ratio from pixels to millimeters
-                double pixels_to_mm_ratio = marker_length_mm / marker_length_pixels;
+                double pixels_to_mm_ratio = marker_length_m / marker_length_pixels;
 
                 // Calculate the distance in pixels between the middles of the two markers
                 double distance = Math.sqrt(Math.pow(middle2[0] - middle1[0], 2) + Math.pow(middle2[1] - middle1[1], 2));
