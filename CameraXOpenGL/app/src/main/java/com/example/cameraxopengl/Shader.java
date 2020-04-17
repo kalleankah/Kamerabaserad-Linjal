@@ -6,23 +6,21 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 
-class Square {
+// This class provides OpenGL shader programs to render the camera preview via texture as well as
+// polygon geometry on top of the preview.
+
+class Shader {
     // These are 2D-coordinates
     private float[] vertices = {-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f};
-    private float[] verticesTri = {0.5f, 0.0f, 0.0f, 0.5f, -0.5f, 0.0f};
+    private float[] verticesTri = {0.2f, -0.2f, 0.0f, 0.2f, -0.2f, -0.2f};
     private float[] textureVertices = {0f, 1f, 1f, 1f, 0f, 0f, 1f, 0f};
 
     private FloatBuffer verticesBuffer;
     private FloatBuffer textureBuffer;
     private FloatBuffer verticesBufferTriangle;
 
-    private int vertexShader = 0;
-    private int fragmentShader = 0;
-    private int vertexShaderGeometry = 0;
-    private int fragmentShaderGeometry = 0;
     private int program = 0;
     private int programGeometry = 1;
-
 
     private String vertexShaderCode = "attribute vec4 aPosition;" +
             "attribute vec2 aTexPosition;" +
@@ -49,21 +47,24 @@ class Square {
             "  gl_FragColor = vec4(1.0, 0.0, 0.0, 1.0);" +
             "}";
 
-    public Square() {
+    // Constructor creates shaders from the code and initializes vertex and texture buffers
+    Shader() {
         initializeBuffers();
         initializeProgram();
     }
 
+    // Allocate buffers for the vertices
     private void initializeBuffers() {
         ByteBuffer buff = ByteBuffer.allocateDirect(vertices.length * 4);
-        ByteBuffer buff2 = ByteBuffer.allocateDirect(verticesTri.length * 4);
         buff.order(ByteOrder.nativeOrder());
-        buff2.order(ByteOrder.nativeOrder());
         verticesBuffer = buff.asFloatBuffer();
-        verticesBufferTriangle = buff2.asFloatBuffer();
         verticesBuffer.put(vertices);
-        verticesBufferTriangle.put(verticesTri);
         verticesBuffer.position(0);
+
+        buff = ByteBuffer.allocateDirect(verticesTri.length * 4);
+        buff.order(ByteOrder.nativeOrder());
+        verticesBufferTriangle = buff.asFloatBuffer();
+        verticesBufferTriangle.put(verticesTri);
         verticesBufferTriangle.position(0);
 
         buff = ByteBuffer.allocateDirect(textureVertices.length * 4);
@@ -73,14 +74,14 @@ class Square {
         textureBuffer.position(0);
     }
 
-    // Initialize shader program with the content in the shader string variables
+    // Initialize shaders with the content in the shader string variables
     private void initializeProgram() {
         // Create shader program for rendering the camera preview
-        vertexShader = GLES20.glCreateShader(GLES20.GL_VERTEX_SHADER);
+        int vertexShader = GLES20.glCreateShader(GLES20.GL_VERTEX_SHADER);
         GLES20.glShaderSource(vertexShader, vertexShaderCode);
         GLES20.glCompileShader(vertexShader);
 
-        fragmentShader = GLES20.glCreateShader(GLES20.GL_FRAGMENT_SHADER);
+        int fragmentShader = GLES20.glCreateShader(GLES20.GL_FRAGMENT_SHADER);
         GLES20.glShaderSource(fragmentShader, fragmentShaderCode);
         GLES20.glCompileShader(fragmentShader);
 
@@ -91,11 +92,11 @@ class Square {
         GLES20.glLinkProgram(program);
 
         // Create shader program for rendering polygons
-        vertexShaderGeometry = GLES20.glCreateShader(GLES20.GL_VERTEX_SHADER);
+        int vertexShaderGeometry = GLES20.glCreateShader(GLES20.GL_VERTEX_SHADER);
         GLES20.glShaderSource(vertexShaderGeometry, vertexShaderGeometryCode);
         GLES20.glCompileShader(vertexShaderGeometry);
 
-        fragmentShaderGeometry = GLES20.glCreateShader(GLES20.GL_FRAGMENT_SHADER);
+        int fragmentShaderGeometry = GLES20.glCreateShader(GLES20.GL_FRAGMENT_SHADER);
         GLES20.glShaderSource(fragmentShaderGeometry, fragmentShaderGeometryCode);
         GLES20.glCompileShader(fragmentShaderGeometry);
 
@@ -130,6 +131,7 @@ class Square {
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
     }
 
+    // Draw geometry without running glClear (draw on top of whatever is on-screen)
     void drawGeometry(int texture){
         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
         GLES20.glUseProgram(programGeometry);
@@ -143,6 +145,7 @@ class Square {
         GLES20.glVertexAttribPointer(positionHandle, 2, GLES20.GL_FLOAT, false, 0, verticesBufferTriangle);
         GLES20.glEnableVertexAttribArray(positionHandle);
 
+        // Don't clear, draw on top
 //        GLES20.glClear(GLES20.GL_COLOR_BUFFER_BIT);
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
     }

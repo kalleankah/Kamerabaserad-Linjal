@@ -8,7 +8,6 @@ import android.graphics.YuvImage;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.GLUtils;
-import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.camera.core.ImageAnalysis;
@@ -20,11 +19,16 @@ import java.nio.ByteBuffer;
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
 
+// The class GLRenderer implements a custom GLSurfaceView.Renderer to handle rendering to a
+// GLSurfaceView. It also provides an ImageAnalysis.Analyzer to perform image analysis on each
+// frame. A texture is generated and the rendering is performed  in an OpenGL shader which is called
+// on each frame.
+
 class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
     private GLSurfaceView glSurfaceView;
-    private int[] textures = {0, 0};
+    private int[] textures = {0};
     private Bitmap image;
-    private Square square;
+    private Shader shader;
 
     GLRenderer(GLSurfaceView view){
         glSurfaceView = view;
@@ -32,9 +36,13 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
+        // Create an empty bitmap to place in the glSurfaceView until the first frame is rendered
         Bitmap.Config conf = Bitmap.Config.ARGB_8888; // see other conf types
         image = Bitmap.createBitmap(1, 1, conf);
+        // Generate a texture to put the image frame in
         generateTexture();
+        // Instantiate shader
+        generateShader();
     }
 
     @Override
@@ -45,11 +53,13 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
 
     @Override
     public void onDrawFrame(GL10 gl) {
-        generateSquare();
+        // Prepare the OpenGL context
         renderTexture();
 
-        square.draw(textures[0]);
-        square.drawGeometry(textures[0]);
+        // Run the shader to render the camera preview
+        shader.draw(textures[0]);
+        // Draw geometry on top of the preview
+        shader.drawGeometry(textures[0]);
     }
 
     @Override
@@ -66,14 +76,14 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
         image = frame;
     }
 
-    private void generateSquare() {
-        if (square == null) {
-            square = new Square();
+    private void generateShader() {
+        if (shader == null) {
+            shader = new Shader();
         }
     }
 
     private void generateTexture() {
-        GLES20.glGenTextures(2, textures, 0);
+        GLES20.glGenTextures(1, textures, 0);
     }
 
     private void renderTexture() {
