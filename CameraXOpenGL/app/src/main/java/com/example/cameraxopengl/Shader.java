@@ -1,6 +1,7 @@
 package com.example.cameraxopengl;
 
 import android.opengl.GLES20;
+import android.opengl.Matrix;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -11,9 +12,14 @@ import java.nio.FloatBuffer;
 
 class Shader {
     // These are 2D-coordinates
-    private float[] vertices = {-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f};
-    private float[] verticesTri = {0.2f, -0.2f, 0.0f, 0.2f, -0.2f, -0.2f};
-    private float[] textureVertices = {0f, 1f, 1f, 1f, 0f, 0f, 1f, 0f};
+    private final float[] vertices = {-1f, -1f, 1f, -1f, -1f, 1f, 1f, 1f};
+//    private final float[] verticesTri = {0.2f, -0.2f, 0.0f, 0.2f, -0.2f, -0.2f};
+    private final float[] verticesTri = {0.2f, -0.2f, -1f, 0.0f, 0.2f, -1f, -0.2f, -0.2f, -1f};
+    private final float[] textureVertices = {0f, 1f, 1f, 1f, 0f, 0f, 1f, 0f};
+
+    private final float[] vPMatrix = new float[16];
+    private final float[] projectionMatrix = new float[16];
+    private final float[] viewMatrix = new float[16];
 
     private FloatBuffer verticesBuffer;
     private FloatBuffer textureBuffer;
@@ -37,9 +43,10 @@ class Shader {
             "  gl_FragColor = texture2D(uTexture, vTexPosition);" +
             "}";
 
-    private String vertexShaderGeometryCode = "attribute vec4 aPosition;" +
+    private String vertexShaderGeometryCode = "attribute vec3 aPosition;" +
+            "uniform mat4 uMVPMatrix;" +
             "void main() {" +
-            "  gl_Position = aPosition;" +
+            "  gl_Position = uMVPMatrix * vec4(aPosition, 1.0);" +
             "}";
 
     private String fragmentShaderGeometryCode = "precision mediump float;" +
@@ -49,8 +56,21 @@ class Shader {
 
     // Constructor creates shaders from the code and initializes vertex and texture buffers
     Shader() {
+        initializeMatrices();
         initializeBuffers();
         initializeProgram();
+    }
+
+    private void initializeMatrices() {
+        float ratio = 16f / 9f;
+        float sensorSize = 1.0f;
+
+        // Define camera frostum
+        Matrix.frustumM(projectionMatrix, 0, -ratio * sensorSize, ratio * sensorSize, -sensorSize, sensorSize, 0.1f, 5f);
+        // Set camera position and direction
+        Matrix.setLookAtM(viewMatrix, 0, 0, 0, 0, 0,0,-1, 0,1,0);
+        // Calculate the projection and view transformation
+        Matrix.multiplyMM(vPMatrix, 0, projectionMatrix, 0, viewMatrix, 0);
     }
 
     // Allocate buffers for the vertices
@@ -138,11 +158,13 @@ class Shader {
         GLES20.glDisable(GLES20.GL_BLEND);
 
         int positionHandle = GLES20.glGetAttribLocation(programGeometry, "aPosition");
+        int vPMatrixHandle = GLES20.glGetUniformLocation(programGeometry, "uMVPMatrix");
+        GLES20.glUniformMatrix4fv(vPMatrixHandle, 1, false, vPMatrix, 0);
 
         GLES20.glActiveTexture(GLES20.GL_TEXTURE0);
         GLES20.glBindTexture(GLES20.GL_TEXTURE_2D, texture);
 
-        GLES20.glVertexAttribPointer(positionHandle, 2, GLES20.GL_FLOAT, false, 0, verticesBufferTriangle);
+        GLES20.glVertexAttribPointer(positionHandle, 3, GLES20.GL_FLOAT, false, 0, verticesBufferTriangle);
         GLES20.glEnableVertexAttribArray(positionHandle);
 
         // Don't clear, draw on top

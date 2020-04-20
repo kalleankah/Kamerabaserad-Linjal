@@ -36,6 +36,7 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
+        GLES20.glClearColor(0f, 0f, 0f, 1f);
         // Create an empty bitmap to place in the glSurfaceView until the first frame is rendered
         Bitmap.Config conf = Bitmap.Config.ARGB_8888; // see other conf types
         image = Bitmap.createBitmap(1, 1, conf);
@@ -48,7 +49,6 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
     @Override
     public void onSurfaceChanged(GL10 gl, int width, int height) {
         GLES20.glViewport(0, 0, width, height);
-        GLES20.glClearColor(0f, 0f, 0f, 1f);
     }
 
     @Override
