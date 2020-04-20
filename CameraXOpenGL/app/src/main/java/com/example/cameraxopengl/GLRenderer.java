@@ -8,13 +8,13 @@ import android.graphics.YuvImage;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.GLUtils;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageProxy;
 
 import org.opencv.android.Utils;
-import org.opencv.aruco.DetectorParameters;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 
@@ -28,7 +28,6 @@ import javax.microedition.khronos.opengles.GL10;
 
 import static org.opencv.aruco.Aruco.DICT_6X6_50;
 import static org.opencv.aruco.Aruco.detectMarkers;
-import static org.opencv.aruco.Aruco.drawDetectedMarkers;
 import static org.opencv.aruco.Aruco.getPredefinedDictionary;
 import static org.opencv.imgproc.Imgproc.COLOR_BGRA2BGR;
 import static org.opencv.imgproc.Imgproc.cvtColor;
@@ -39,10 +38,13 @@ import static org.opencv.imgproc.Imgproc.cvtColor;
 // on each frame.
 
 class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
+    private static final float TEMPORARY_RESOLUTION_CONSTANT_W = 1920f;
+    private static final float TEMPORARY_RESOLUTION_CONSTANT_H = 1080f;
     private GLSurfaceView glSurfaceView;
     private int[] textures = {0};
     private Bitmap image;
     private Shader shader;
+    private float[][] markerCorners2D;
 
     GLRenderer(GLSurfaceView view){
         glSurfaceView = view;
@@ -72,8 +74,18 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
 
         // Run the shader to render the camera preview
         shader.draw(textures[0]);
+
         // Draw geometry on top of the preview
-//        shader.drawGeometry(textures[0]);
+        if(markerCorners2D != null){
+            shader.drawMarkerGL(markerCorners2D);
+        }
+
+//        // DEBUG MARKER COORDS
+//        Log.d("CORNERS", "Number of markers: " + markerCorners2D.length/8 + "\n" +
+//                "Corner 1: (" + markerCorners2D[0] + ", " + markerCorners2D[1] + ")" + "\n" +
+//                "Corner 2: (" + markerCorners2D[2] + ", " + markerCorners2D[3] + ")" + "\n" +
+//                "Corner 3: (" + markerCorners2D[4] + ", " + markerCorners2D[5] + ")" + "\n" +
+//                "Corner 4: (" + markerCorners2D[6] + ", " + markerCorners2D[7] + ")");
     }
 
     @Override
@@ -82,9 +94,7 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
 
         markerDetection(bitmap);
 
-        bitmap.recycle();
-
-//        setImage(bitmap);
+        setImage(bitmap);
 
         glSurfaceView.requestRender();
 
@@ -102,66 +112,50 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
         cvtColor(originalImage, image, COLOR_BGRA2BGR);
         originalImage.release();
 
-        /* This code below is an alternative to the two lines above, don't know which solution is
-        better and are therefor keeping this as well for now. Both work equally well, so the question
-        is just if one is more efficient than the other.
-
-        Mat image = new Mat();
-        Bitmap bmp = bitmap.copy(Bitmap.Config.ARGB_8888, true);
-        Utils.bitmapToMat(bmp, image); */
-
-        // Set parameters for the detectMarkers function
-        // These are needed for the function to work
-        DetectorParameters parameters = DetectorParameters.create();
-        parameters.set_minDistanceToBorder(0);
-        parameters.set_adaptiveThreshWinSizeMax(400);
-
-
         List<Mat> corners = new ArrayList<>();  // Create a list of Mats to store the corners of the markers
         Mat ids = new Mat();                    // Create a Mat to store all the ids of the markers
 
         // Detect the markers in the image and store their corners and ids in the corresponding variables
-        detectMarkers(image, getPredefinedDictionary(DICT_6X6_50), corners, ids, parameters);
+        detectMarkers(image, getPredefinedDictionary(DICT_6X6_50), corners, ids);
 
-        double[] id1 = ids.get(0,0);
-        double[] id2 = ids.get(3,0);
+        if(corners.size()>0){
+            // Each marker has 4 corners with 2 coordinates each -> 8 floats per corner
+            markerCorners2D = new float[corners.size()][8];
 
-        // If any markers have been detected, draw the square around it and store it in outputImage
-        if(corners.size() > 0){
-            drawDetectedMarkers(image, corners, ids);
-//            image.release();
+            for(int i = 0; i<corners.size(); ++i){
+                // i is the index of the marker
+                Mat marker = corners.get(0);
 
-            if(corners.size() > 3) {
-                Mat corner1 = corners.get(0);
-                double[] xy10 = corner1.get(0,0);
-                double[] xy11 = corner1.get(0,1);
-                double[] xy12 = corner1.get(0,2);
-                Mat corner2 = corners.get(3);
-                double[] xy21 = corner2.get(0,1);
-                double[] xy23 = corner2.get(0,3);
+                // Organize corners for GL_LINE_LOOP draw order
+//                // Corner 1 - Bottom Left
+//                markerCorners2D[8*i+0] = (float) marker.get(0,0)[0] * 2 / TEMPORARY_RESOLUTION_CONSTANT_W - 1;
+//                markerCorners2D[8*i+1] = (float) -(marker.get(0,0)[1] * 2 / TEMPORARY_RESOLUTION_CONSTANT_H - 1);
+//                // Corner 2 - Bottom Right
+//                markerCorners2D[8*i+2] = (float) marker.get(0,3)[0] * 2 / TEMPORARY_RESOLUTION_CONSTANT_W - 1;
+//                markerCorners2D[8*i+3] = (float) -(marker.get(0,3)[1] * 2 / TEMPORARY_RESOLUTION_CONSTANT_H - 1);
+//                // Corner 3 - Top Left
+//                markerCorners2D[8*i+4] = (float) marker.get(0,2)[0] * 2 / TEMPORARY_RESOLUTION_CONSTANT_W - 1;
+//                markerCorners2D[8*i+5] = (float) -(marker.get(0,2)[1] * 2 / TEMPORARY_RESOLUTION_CONSTANT_H - 1);
+//                // Corner 4 - Top Right
+//                markerCorners2D[8*i+6] = (float) marker.get(0,1)[0] * 2 / TEMPORARY_RESOLUTION_CONSTANT_W - 1;
+//                markerCorners2D[8*i+7] = (float) -(marker.get(0,1)[1] * 2 / TEMPORARY_RESOLUTION_CONSTANT_H - 1);
 
-                double[] middle1 = {(xy10[0] + xy12[0])/2, (xy10[1] + xy12[1])/2};
-                double[] middle2 = {(xy21[0] + xy23[0])/2, (xy21[1] + xy23[1])/2};
-
-                double pixel_width = Math.sqrt(Math.pow(xy11[0] - xy10[0], 2) + Math.pow(xy11[1] - xy10[1], 2));
-
-                double distance = Math.sqrt(Math.pow(middle2[0] - middle1[0], 2) + Math.pow(middle2[1] - middle1[1], 2));
-                double distanceIn_mm = distance*50/pixel_width;
-                //Toast.makeText(getApplicationContext(), "1: " + id1[0] + " 2: " + id2[0],Toast.LENGTH_SHORT).show();
-//                Toast.makeText(getApplicationContext(),"The distance is " + distanceIn_mm,Toast.LENGTH_SHORT).show();
+                // Corner 1 - Bottom Left
+                markerCorners2D[i][0] = (float) marker.get(0,0)[0] * 2 / TEMPORARY_RESOLUTION_CONSTANT_W - 1;
+                markerCorners2D[i][1] = (float) -(marker.get(0,0)[1] * 2 / TEMPORARY_RESOLUTION_CONSTANT_H - 1);
+                // Corner 2 - Bottom Right
+                markerCorners2D[i][2] = (float) marker.get(0,3)[0] * 2 / TEMPORARY_RESOLUTION_CONSTANT_W - 1;
+                markerCorners2D[i][3] = (float) -(marker.get(0,3)[1] * 2 / TEMPORARY_RESOLUTION_CONSTANT_H - 1);
+                // Corner 3 - Top Left
+                markerCorners2D[i][4] = (float) marker.get(0,2)[0] * 2 / TEMPORARY_RESOLUTION_CONSTANT_W - 1;
+                markerCorners2D[i][5] = (float) -(marker.get(0,2)[1] * 2 / TEMPORARY_RESOLUTION_CONSTANT_H - 1);
+                // Corner 4 - Top Right
+                markerCorners2D[i][6] = (float) marker.get(0,1)[0] * 2 / TEMPORARY_RESOLUTION_CONSTANT_W - 1;
+                markerCorners2D[i][7] = (float) -(marker.get(0,1)[1] * 2 / TEMPORARY_RESOLUTION_CONSTANT_H - 1);
             }
+        }else{
+            markerCorners2D = null;
         }
-
-//        Log.d("MAT DIMENSIONS", "Width: " + outputImage.width() + " Height: " + outputImage.height());
-
-        // Convert to bitmap
-        Bitmap.Config conf = Bitmap.Config.ARGB_8888;
-        Bitmap outBitmap = Bitmap.createBitmap(image.width(), image.height(), conf);
-        Utils.matToBitmap(image, outBitmap);
-        image.release();
-
-        // Display the output image
-        setImage(outBitmap);
     }
 
     private synchronized void setImage (Bitmap frame){
