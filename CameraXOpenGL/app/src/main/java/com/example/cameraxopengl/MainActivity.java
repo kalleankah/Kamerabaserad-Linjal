@@ -39,7 +39,7 @@ public class MainActivity extends AppCompatActivity {
         // GLSurfaceView.Renderer and an ImageAnalysis.Analyzer
         renderer = new GLRenderer(glSurfaceView);
         glSurfaceView.setPreserveEGLContextOnPause(true);
-        glSurfaceView.setEGLContextClientVersion(2);
+        glSurfaceView.setEGLContextClientVersion(3);
         // Use the implemented GLSurfaceView.Renderer functions in the GLRender object "renderer"
         glSurfaceView.setRenderer(renderer);
         // Only perform a render when data in the glSurfaceView has updated

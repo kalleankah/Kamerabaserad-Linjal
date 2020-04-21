@@ -8,7 +8,6 @@ import android.graphics.YuvImage;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.GLUtils;
-import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.camera.core.ImageAnalysis;
@@ -22,6 +21,11 @@ import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.RejectedExecutionHandler;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
 import javax.microedition.khronos.egl.EGLConfig;
 import javax.microedition.khronos.opengles.GL10;
@@ -38,24 +42,32 @@ import static org.opencv.imgproc.Imgproc.cvtColor;
 // on each frame.
 
 class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
-    private static final float TEMPORARY_RESOLUTION_CONSTANT_W = 1920f;
-    private static final float TEMPORARY_RESOLUTION_CONSTANT_H = 1080f;
     private GLSurfaceView glSurfaceView;
     private int[] textures = {0};
     private Bitmap image;
+    private Bitmap imageCopyForExecutor;
     private Shader shader;
-    private float[][] markerCorners2D;
+    private MarkerContainer markerContainer = new MarkerContainer();
+    private ExecutorService executor;
 
+    // Constructor that sets up the
     GLRenderer(GLSurfaceView view){
         glSurfaceView = view;
+
+        // Create an empty bitmap to place in the glSurfaceView until the first frame is rendered
+        image = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+
+        // Set up the executor to handle Marker Detection in the background
+        executor = new ThreadPoolExecutor(1, 1,
+                0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingQueue<>(1),
+                new ThreadPoolExecutor.DiscardOldestPolicy());
     }
 
     @Override
     public void onSurfaceCreated(GL10 gl, EGLConfig config) {
         GLES20.glClearColor(0f, 0f, 0f, 1f);
-        // Create an empty bitmap to place in the glSurfaceView until the first frame is rendered
-        Bitmap.Config conf = Bitmap.Config.ARGB_8888; // see other conf types
-        image = Bitmap.createBitmap(1, 1, conf);
+
         // Generate a texture to put the image frame in
         generateTexture();
         // Instantiate shader
@@ -75,24 +87,19 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
         // Run the shader to render the camera preview
         shader.draw(textures[0]);
 
-        // Draw geometry on top of the preview
-        if(markerCorners2D != null){
-            shader.drawMarkerGL(markerCorners2D);
+        // Draw markers (if found) on top of the preview
+        if(markerContainer.isNotEmpty()){
+            shader.drawMarkerGL(markerContainer.getMarkerCorners());
         }
-
-//        // DEBUG MARKER COORDS
-//        Log.d("CORNERS", "Number of markers: " + markerCorners2D.length/8 + "\n" +
-//                "Corner 1: (" + markerCorners2D[0] + ", " + markerCorners2D[1] + ")" + "\n" +
-//                "Corner 2: (" + markerCorners2D[2] + ", " + markerCorners2D[3] + ")" + "\n" +
-//                "Corner 3: (" + markerCorners2D[4] + ", " + markerCorners2D[5] + ")" + "\n" +
-//                "Corner 4: (" + markerCorners2D[6] + ", " + markerCorners2D[7] + ")");
     }
 
     @Override
     public void analyze(@NonNull ImageProxy proxy) {
         Bitmap bitmap = Bitmap.createBitmap(toBitmap(proxy), 0, 0, proxy.getWidth(), proxy.getHeight());
 
-        markerDetection(bitmap);
+        // USE EITHER ASYNCHRONOUS OR SYNCHRONOUS MARKER DETECTION
+        markerDetectionAsynchronized(bitmap);
+//        markerDetectionSynchronized(bitmap);
 
         setImage(bitmap);
 
@@ -101,9 +108,22 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
         proxy.close();
     }
 
-    private void markerDetection(Bitmap bitmap) {
+    // Asynchronously detect ArUco markers by executing an instance of MarkerDetector in the background
+    // Camera preview is rendered regardless if marker coordinates are found.
+    // If markers are found, they will be rendered the next time onDrawFrame() is called
+    private void markerDetectionAsynchronized(Bitmap bitmap) {
+        // The executor needs to work on a copy of the bitmap to prevent it from being recycled
+        imageCopyForExecutor = bitmap.copy(bitmap.getConfig(), false);
+        executor.execute(new MarkerDetector(imageCopyForExecutor, markerContainer));
+    }
+
+    // Detect markers on the same thread
+    // Camera preview is not rendered until we know the marker coordinates
+    private void markerDetectionSynchronized(Bitmap bitmap) {
+        int width = bitmap.getWidth();
+        int height = bitmap.getHeight();
         // Create a Mat and copy the input Bitmap into it
-        Mat originalImage = new Mat(bitmap.getHeight(), bitmap.getWidth(), CvType.CV_8UC3);
+        Mat originalImage = new Mat(height, width, CvType.CV_8UC3);
         Utils.bitmapToMat(bitmap, originalImage);
 
         // Create a new Mat that's the same as the one above but with three color channels instead of four
@@ -120,41 +140,31 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
 
         if(corners.size()>0){
             // Each marker has 4 corners with 2 coordinates each -> 8 floats per corner
-            markerCorners2D = new float[corners.size()][8];
+            float[][] markerCorners2D = new float[corners.size()][8];
 
             for(int i = 0; i<corners.size(); ++i){
                 // i is the index of the marker
-                Mat marker = corners.get(0);
+                Mat marker = corners.get(i);
 
-                // Organize corners for GL_LINE_LOOP draw order
-//                // Corner 1 - Bottom Left
-//                markerCorners2D[8*i+0] = (float) marker.get(0,0)[0] * 2 / TEMPORARY_RESOLUTION_CONSTANT_W - 1;
-//                markerCorners2D[8*i+1] = (float) -(marker.get(0,0)[1] * 2 / TEMPORARY_RESOLUTION_CONSTANT_H - 1);
-//                // Corner 2 - Bottom Right
-//                markerCorners2D[8*i+2] = (float) marker.get(0,3)[0] * 2 / TEMPORARY_RESOLUTION_CONSTANT_W - 1;
-//                markerCorners2D[8*i+3] = (float) -(marker.get(0,3)[1] * 2 / TEMPORARY_RESOLUTION_CONSTANT_H - 1);
-//                // Corner 3 - Top Left
-//                markerCorners2D[8*i+4] = (float) marker.get(0,2)[0] * 2 / TEMPORARY_RESOLUTION_CONSTANT_W - 1;
-//                markerCorners2D[8*i+5] = (float) -(marker.get(0,2)[1] * 2 / TEMPORARY_RESOLUTION_CONSTANT_H - 1);
-//                // Corner 4 - Top Right
-//                markerCorners2D[8*i+6] = (float) marker.get(0,1)[0] * 2 / TEMPORARY_RESOLUTION_CONSTANT_W - 1;
-//                markerCorners2D[8*i+7] = (float) -(marker.get(0,1)[1] * 2 / TEMPORARY_RESOLUTION_CONSTANT_H - 1);
-
+                // Put corners in the order OpenGL expects them. Note that the Y-axis is flipped
                 // Corner 1 - Bottom Left
-                markerCorners2D[i][0] = (float) marker.get(0,0)[0] * 2 / TEMPORARY_RESOLUTION_CONSTANT_W - 1;
-                markerCorners2D[i][1] = (float) -(marker.get(0,0)[1] * 2 / TEMPORARY_RESOLUTION_CONSTANT_H - 1);
+                markerCorners2D[i][0] = (float) (marker.get(0,0)[0] * 2.0 / width - 1);
+                markerCorners2D[i][1] = (float) -(marker.get(0,0)[1] * 2.0 / height - 1);
                 // Corner 2 - Bottom Right
-                markerCorners2D[i][2] = (float) marker.get(0,3)[0] * 2 / TEMPORARY_RESOLUTION_CONSTANT_W - 1;
-                markerCorners2D[i][3] = (float) -(marker.get(0,3)[1] * 2 / TEMPORARY_RESOLUTION_CONSTANT_H - 1);
+                markerCorners2D[i][2] = (float) (marker.get(0,1)[0] * 2.0 / width - 1);
+                markerCorners2D[i][3] = (float) -(marker.get(0,1)[1] * 2.0 / height - 1);
                 // Corner 3 - Top Left
-                markerCorners2D[i][4] = (float) marker.get(0,2)[0] * 2 / TEMPORARY_RESOLUTION_CONSTANT_W - 1;
-                markerCorners2D[i][5] = (float) -(marker.get(0,2)[1] * 2 / TEMPORARY_RESOLUTION_CONSTANT_H - 1);
+                markerCorners2D[i][4] = (float) (marker.get(0,2)[0] * 2.0 / width - 1);
+                markerCorners2D[i][5] = (float) -(marker.get(0,2)[1] * 2.0 / height - 1);
                 // Corner 4 - Top Right
-                markerCorners2D[i][6] = (float) marker.get(0,1)[0] * 2 / TEMPORARY_RESOLUTION_CONSTANT_W - 1;
-                markerCorners2D[i][7] = (float) -(marker.get(0,1)[1] * 2 / TEMPORARY_RESOLUTION_CONSTANT_H - 1);
+                markerCorners2D[i][6] = (float) (marker.get(0,3)[0] * 2.0 / width - 1);
+                markerCorners2D[i][7] = (float) -(marker.get(0,3)[1] * 2.0 / height - 1);
             }
-        }else{
-            markerCorners2D = null;
+
+            markerContainer.setMarkerCorners(markerCorners2D);
+        }
+        else{
+            markerContainer.makeEmpty();
         }
     }
 
