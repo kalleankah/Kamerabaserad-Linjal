@@ -8,11 +8,13 @@ import android.graphics.YuvImage;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.GLUtils;
+import android.util.Log;
 
 import androidx.annotation.NonNull;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageProxy;
 
+import org.jetbrains.annotations.NotNull;
 import org.opencv.android.Utils;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
@@ -23,7 +25,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.RejectedExecutionHandler;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 
@@ -45,7 +46,6 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
     private GLSurfaceView glSurfaceView;
     private int[] textures = {0};
     private Bitmap image;
-    private Bitmap imageCopyForExecutor;
     private Shader shader;
     private MarkerContainer markerContainer = new MarkerContainer();
     private ExecutorService executor;
@@ -58,9 +58,10 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
         image = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
 
         // Set up the executor to handle Marker Detection in the background
-        executor = new ThreadPoolExecutor(1, 1,
+        int poolsize = 1; int queuesize = 1;
+        executor = new ThreadPoolExecutor(poolsize, poolsize,
                 0L, TimeUnit.MILLISECONDS,
-                new LinkedBlockingQueue<>(1),
+                new LinkedBlockingQueue<>(queuesize),
                 new ThreadPoolExecutor.DiscardOldestPolicy());
     }
 
@@ -95,31 +96,32 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
 
     @Override
     public void analyze(@NonNull ImageProxy proxy) {
-        Bitmap bitmap = Bitmap.createBitmap(toBitmap(proxy), 0, 0, proxy.getWidth(), proxy.getHeight());
+//        Bitmap bitmap = Bitmap.createBitmap(toBitmap(proxy), 0, 0, proxy.getWidth(), proxy.getHeight());
+        Bitmap bitmap = toBitmap(proxy);
+        proxy.close();
 
         // USE EITHER ASYNCHRONOUS OR SYNCHRONOUS MARKER DETECTION
-        markerDetectionAsynchronized(bitmap);
+        markerDetectionAsynchronous(bitmap);
 //        markerDetectionSynchronized(bitmap);
 
         setImage(bitmap);
 
         glSurfaceView.requestRender();
-
-        proxy.close();
     }
 
     // Asynchronously detect ArUco markers by executing an instance of MarkerDetector in the background
     // Camera preview is rendered regardless if marker coordinates are found.
     // If markers are found, they will be rendered the next time onDrawFrame() is called
-    private void markerDetectionAsynchronized(Bitmap bitmap) {
+    private void markerDetectionAsynchronous(Bitmap bitmap) {
         // The executor needs to work on a copy of the bitmap to prevent it from being recycled
-        imageCopyForExecutor = bitmap.copy(bitmap.getConfig(), false);
-        executor.execute(new MarkerDetector(imageCopyForExecutor, markerContainer));
+        executor.execute(new MarkerDetector(bitmap.copy(bitmap.getConfig(), false), markerContainer));
     }
 
     // Detect markers on the same thread
     // Camera preview is not rendered until we know the marker coordinates
     private void markerDetectionSynchronized(Bitmap bitmap) {
+        long lastDetection = System.nanoTime();
+
         int width = bitmap.getWidth();
         int height = bitmap.getHeight();
         // Create a Mat and copy the input Bitmap into it
@@ -166,6 +168,8 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
         else{
             markerContainer.makeEmpty();
         }
+
+        Log.d("Detection fps", "" + (int) (1000 / ((System.nanoTime() - lastDetection)/1000000.0)) + "fps");
     }
 
     private synchronized void setImage (Bitmap frame){
@@ -202,8 +206,9 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
         GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, image, 0);
     }
 
-    private Bitmap toBitmap(ImageProxy image) {
-        assert image != null;
+    private Bitmap toBitmap(@NotNull ImageProxy image) {
+        long timer = System.nanoTime();
+
         ImageProxy.PlaneProxy[] planes = image.getPlanes();
         ByteBuffer yBuffer = planes[0].getBuffer();
         ByteBuffer uBuffer = planes[1].getBuffer();
@@ -222,10 +227,10 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
         YuvImage yuvImage = new YuvImage(nv21, ImageFormat.NV21, image.getWidth(), image.getHeight(), null);
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         yuvImage.compressToJpeg(new Rect(0, 0, yuvImage.getWidth(), yuvImage.getHeight()), 75, out);
-        yuvImage = null;
 
         byte[] imageBytes = out.toByteArray();
-        out = null;
-        return BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
+        Bitmap bm = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
+        Log.d("Bitmap conversion time", "" + (int)((System.nanoTime() - timer)/1000000.0) + "ms");
+        return bm;
     }
 }

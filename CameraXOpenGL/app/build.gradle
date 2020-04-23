@@ -48,4 +48,5 @@ dependencies {
     implementation "androidx.camera:camera-view:1.0.0-alpha08"
     // If you want to use the CameraX Extensions library
     implementation "androidx.camera:camera-extensions:1.0.0-alpha08"
+    implementation 'org.jetbrains:annotations:15.0'
 }

@@ -1,6 +1,7 @@
 package com.example.cameraxopengl;
 
 import android.graphics.Bitmap;
+import android.util.Log;
 
 import org.opencv.android.Utils;
 import org.opencv.aruco.DetectorParameters;
@@ -9,6 +10,7 @@ import org.opencv.core.Mat;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 
 import static org.opencv.aruco.Aruco.DICT_6X6_50;
 import static org.opencv.aruco.Aruco.detectMarkers;
@@ -23,12 +25,12 @@ import static org.opencv.imgproc.Imgproc.cvtColor;
 
 class MarkerDetector implements Runnable {
     private Bitmap bitmap;
-    private int width = 0;
-    private int height = 0;
+    private int width;
+    private int height;
     private MarkerContainer markerContainer;
     private float[][] markerCorners2D;
 
-    public MarkerDetector(Bitmap b, MarkerContainer container){
+    MarkerDetector(Bitmap b, MarkerContainer container){
         // Receives a reference to a copy of a preview frame, needs to recycle when done ??
         bitmap = b;
         width = b.getWidth();
@@ -54,8 +56,11 @@ class MarkerDetector implements Runnable {
         List<Mat> corners = new ArrayList<>();  // Create a list of Mats to store the corners of the markers
         Mat ids = new Mat();                    // Create a Mat to store all the ids of the markers
 
+        DetectorParameters detectorParameters = DetectorParameters.create();
+//        detectorParameters.set_adaptiveThreshWinSizeMax(400);
+
         // Detect the markers in the image and store their corners and ids in the corresponding variables
-        detectMarkers(image, getPredefinedDictionary(DICT_6X6_50), corners, ids);
+        detectMarkers(image, getPredefinedDictionary(DICT_6X6_50), corners, ids, detectorParameters);
 
         if(corners.size()>0){
             // Each marker has 4 corners with 2 coordinates each -> 8 floats per corner
@@ -83,8 +88,6 @@ class MarkerDetector implements Runnable {
             markerContainer.setMarkerCorners(markerCorners2D);
         }
         else{
-            // Remove the copied bitmap when we're done with it
-            bitmap.recycle();
             markerContainer.makeEmpty();
         }
     }

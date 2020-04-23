@@ -123,55 +123,6 @@ class Shader {
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4);
     }
 
-//    // SINGLE MARKER DRAW FUNCTION
-//    // Draw geometry
-//    void drawMarkerGL(float[][] markerVerticesMatrix){
-//        int markerCount = markerVerticesMatrix.length;
-//
-//        float[] markerVertices = markerVerticesMatrix[0];
-//
-//        ByteBuffer buff = ByteBuffer.allocateDirect(markerVertices.length * 4);
-//        buff.order(ByteOrder.nativeOrder());
-//        FloatBuffer markerVerticesBuffer = buff.asFloatBuffer();
-//        markerVerticesBuffer.put(markerVertices);
-//        markerVerticesBuffer.position(0);
-//
-//        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
-//        GLES20.glUseProgram(programGeometry);
-//        GLES20.glDisable(GLES20.GL_BLEND);
-//
-//        int positionHandle = GLES20.glGetAttribLocation(programGeometry, "aPosition");
-//
-//        GLES20.glVertexAttribPointer(positionHandle, 2, GLES20.GL_FLOAT, false, 0, markerVerticesBuffer);
-//        GLES20.glEnableVertexAttribArray(positionHandle);
-//
-//        // Count should probably be a different number than 4
-//        GLES20.glDrawArrays(GLES20.GL_LINE_LOOP, 0, 4);
-//    }
-
-//    // MULTIPLE MARKER DRAW FUNCTION -- DOESN'T WORK
-//    // Draw geometry without running glClear (draw on top of whatever is on-screen)
-//    void drawMarkerGL(float[][] markerVertices){
-//        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, 0);
-//        GLES20.glUseProgram(programGeometry);
-//        GLES20.glDisable(GLES20.GL_BLEND);
-//
-//        for (float[] markerVertex : markerVertices) {
-//            ByteBuffer buff = ByteBuffer.allocateDirect(markerVertex.length * 4);
-//            buff.order(ByteOrder.nativeOrder());
-//            FloatBuffer markerVerticesBuffer = buff.asFloatBuffer();
-//            markerVerticesBuffer.put(markerVertex);
-//            markerVerticesBuffer.position(0);
-//
-//            int positionHandle = GLES20.glGetAttribLocation(programGeometry, "aPosition");
-//
-//            GLES20.glVertexAttribPointer(positionHandle, 2, GLES20.GL_FLOAT, false, 0, markerVerticesBuffer);
-//            GLES20.glEnableVertexAttribArray(positionHandle);
-//            GLES20.glDrawArrays(GLES20.GL_LINES, 0, 4);
-//        }
-//    }
-
-    // MULTIPLE MARKER VAO DRAW FUNCTION -- DOESN'T WORK
     // Draw geometry without running glClear (draw on top of whatever is on-screen)
     void drawMarkerGL(float[][] markerVertices){
 

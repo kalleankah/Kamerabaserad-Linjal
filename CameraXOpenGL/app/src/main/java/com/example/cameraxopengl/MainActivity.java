@@ -8,6 +8,7 @@ import android.util.Log;
 import android.util.Size;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.camera.core.AspectRatio;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.lifecycle.ProcessCameraProvider;
@@ -35,13 +36,16 @@ public class MainActivity extends AppCompatActivity {
 
         // "glSurfaceView" is the layout container for the camera preview
         GLSurfaceView glSurfaceView = findViewById(R.id.glsurfaceview);
+
         // "renderer" is an instance of the custom class GLRenderer which implements a
         // GLSurfaceView.Renderer and an ImageAnalysis.Analyzer
         renderer = new GLRenderer(glSurfaceView);
         glSurfaceView.setPreserveEGLContextOnPause(true);
         glSurfaceView.setEGLContextClientVersion(3);
+
         // Use the implemented GLSurfaceView.Renderer functions in the GLRender object "renderer"
         glSurfaceView.setRenderer(renderer);
+
         // Only perform a render when data in the glSurfaceView has updated
         glSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
 
@@ -70,7 +74,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void loadOpenCV() {
-        Log.d("OpenCVManager", "Waiting for OpenCV to load...");
         while(!OpenCVLoader.initDebug()){
             try {
                 Thread.sleep(100);
@@ -89,7 +92,7 @@ public class MainActivity extends AppCompatActivity {
                 //If new camera frames are delivered faster than the analysis is done, skip frames
                 // in between and only perform analysis on the most recent frame.
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .setTargetResolution(new Size(1920, 1080))
+                .setTargetResolution(new Size(1280, 720))
                 .build();
 
         // Run analysis on a new executor thread. The object "renderer" is an instance of the custom
@@ -97,19 +100,14 @@ public class MainActivity extends AppCompatActivity {
         imageAnalysis.setAnalyzer(Executors.newSingleThreadExecutor(), renderer);
 
         cameraProviderFuture.addListener(() -> {
-            ProcessCameraProvider cameraProvider = null;
-
             try {
-                cameraProvider = cameraProviderFuture.get();
-            } catch (ExecutionException | InterruptedException e) {
+                // The lifecycle of the camera is tied to the lifecycle of the object calling "startCamera()"
+                // which in this case is the container for the preview "glSurfaceView"
+                cameraProviderFuture.get().bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, imageAnalysis);
+            }
+            catch (ExecutionException | InterruptedException e) {
                 e.printStackTrace();
             }
-            assert cameraProvider != null;
-
-            // The lifecycle of the camera is tied to the lifecycle of the object calling "startCamera()"
-            // which in this case is the container for the preview "glSurfaceView"
-            cameraProvider.bindToLifecycle(this, CameraSelector.DEFAULT_BACK_CAMERA, imageAnalysis);
-
-            }, ContextCompat.getMainExecutor(this));
+        }, ContextCompat.getMainExecutor(this));
     }
 }
