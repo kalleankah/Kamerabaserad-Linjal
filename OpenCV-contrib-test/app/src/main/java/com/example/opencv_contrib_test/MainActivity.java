@@ -78,9 +78,10 @@ public class MainActivity extends AppCompatActivity {
         cameraMatrix.put(0, 0, intrinsics);
 
         // 0.3363400302339669, -1.095918772105208, 0.001395881531710981, -0.00113269394288377, 1.487878827052818
+        // 0.3431819827974362f, -1.193396780240877f, 0.0006321712163795779f, -0.0015330516048675f, 1.744512267748753f
         // Skapa matrisen med distortionskoefficienterna
         distCoeff = new Mat(1,5, CvType.CV_32F);
-        float[] distortion = {0, 0, 0, 0, 0}; // 8.4e-03f, -1.6e-01f ,1.4e-03f, -3.9e-03f, 1.3e-01f
+        float[] distortion = {0, 0, 0, 0, 0};
         distCoeff.put(0, 0, distortion);
 
         Button buttonLoadImage = (Button) findViewById(R.id.buttonLoadPicture);
@@ -181,110 +182,21 @@ public class MainActivity extends AppCompatActivity {
             // from middle to middle for the first two markers
             if(corners.size() > 1) {
 
-                List<Mat> camera_points = new ArrayList<>(); // Matrix to fill with the 3D-coordinates in the camera coordinate system
-                float half_side = marker_length_m / 2; // The length of half the size of a marker
+                Mat tvec1 = new Mat(1,1, CvType.CV_64FC3);
+                tvec1.put(0,0,tvecs.get(0,0));
 
-                //Create empty matrices to fill
-                Mat rvec = new Mat(1,1, CvType.CV_64FC3);
-                Mat tvec = new Mat(1,1, CvType.CV_64FC3);
-                Mat rot_mat = new Mat(3,3,CvType.CV_64F);
+                Mat tvec2 = new Mat(1,1, CvType.CV_64FC3);
+                tvec2.put(0,0,tvecs.get(1,0));
 
-                // When there are than one markers in the image, another row is added to rvecs and
-                // tvecs for each marker. Therefore, we need to take out one row (one marker) at the time.
-                // The for-loop only goes to two right now so that we only calculate the distance between two markers,
-                // once we've figured out how we want to do with the case of more than two markers in an image we
-                // might want to change from 2 to corners.size()
-                for(int i = 0; i < 2; i++) {
-                    // Get rvec and tvec for the current marker from rvecs and tvecs
-                    rvec.put(0,0, rvecs.get(i,0));
-                    tvec.put(0,0, tvecs.get(i,0));
-                    Rodrigues(rvec, rot_mat);       // This must be done on rvec to make it into a 3x3 rotation matrix
+                double distance = Math.sqrt(Math.pow(tvec1.get(0, 0)[0] - tvec2.get(0, 0)[0], 2)
+                        + Math.pow(tvec1.get(0, 0)[1] - tvec2.get(0, 0)[1], 2)
+                        + Math.pow(tvec1.get(0, 0)[2] - tvec2.get(0, 0)[2], 2));
 
-                    rot_mat = rot_mat.t();
-
-                    // To understand this, best look at https://stackoverflow.com/questions/46363618/aruco-markers-with-opencv-get-the-3d-corner-coordinates
-                    // Width is E and Height is F
-                    double Width_1 = rot_mat.get(0,0)[0] * half_side;
-                    double Width_2 = rot_mat.get(0,1)[0] * half_side;
-                    double Width_3 = rot_mat.get(0,2)[0] * half_side;
-
-                    double Height_1 = rot_mat.get(1,0)[0] * half_side;
-                    double Height_2 = rot_mat.get(1,1)[0] * half_side;
-                    double Height_3 = rot_mat.get(1,2)[0] * half_side;
-
-                    // First corner
-                    double corner_x = -Width_1 + Height_1 + tvec.get(0,0)[0];
-                    double corner_y = -Width_2 + Height_2 + tvec.get(0,0)[1];
-                    double corner_z = -Width_3 + Height_3 + tvec.get(0,0)[2];
-
-                    // Add to matrix
-                    double[] corner_coord = {corner_x, corner_y, corner_z};
-                    Mat camera_points_coords_0 = new Mat(1,3,CvType.CV_64F);
-                    camera_points_coords_0.put(0, 0, corner_coord);
-                    camera_points.add(camera_points_coords_0);
-
-                    // Second corner
-                    corner_x = Width_1 + Height_1 + tvec.get(0,0)[0];
-                    corner_y = Width_2 + Height_2 + tvec.get(0,0)[1];
-                    corner_z = Width_3 + Height_3 + tvec.get(0,0)[2];
-
-                    // Add to camera points matrix
-                    corner_coord[0] = corner_x; corner_coord[1] = corner_y; corner_coord[2] = corner_z;
-                    Mat camera_points_coords_1 = new Mat(1,3,CvType.CV_64F);
-                    camera_points_coords_1.put(0, 0, corner_coord);
-                    camera_points.add(camera_points_coords_1);
-
-                    // Third corner
-                    corner_x = Width_1 - Height_1 + tvec.get(0,0)[0];
-                    corner_y = Width_2 - Height_2 + tvec.get(0,0)[1];
-                    corner_z = Width_3 - Height_3 + tvec.get(0,0)[2];
-
-                    // Add to camera points matrix
-                    corner_coord[0] = corner_x; corner_coord[1] = corner_y; corner_coord[2] = corner_z;
-                    Mat camera_points_coords_2 = new Mat(1,3,CvType.CV_64F);
-                    camera_points_coords_2.put(0, 0, corner_coord);
-                    camera_points.add(camera_points_coords_2);
-
-                    // Fourth corner
-                    corner_x = -Width_1 - Height_1 + tvec.get(0,0)[0];
-                    corner_y = -Width_2 - Height_2 + tvec.get(0,0)[1];
-                    corner_z = -Width_3 - Height_3 + tvec.get(0,0)[2];
-
-                    // Add to camera points matrix
-                    corner_coord[0] = corner_x; corner_coord[1] = corner_y; corner_coord[2] = corner_z;
-                    Mat camera_points_coords_3 = new Mat(1,3,CvType.CV_64F);
-                    camera_points_coords_3.put(0, 0, corner_coord);
-                    camera_points.add(camera_points_coords_3);
-                }
-
-                if(camera_points.size() == 8) {
-                    calculateDistance(camera_points);
-                }
-
+                Toast.makeText(getApplicationContext(),"The distance (tvec) is " + distance,Toast.LENGTH_SHORT).show();
             }
         }
 
         // Display the output image
         displayMarker(outputImage);
-    }
-
-    private void calculateDistance(List<Mat> camera_points) {
-        double x1 = (camera_points.get(0).get(0,0)[0] + camera_points.get(1).get(0,0)[0]
-                + camera_points.get(2).get(0,0)[0] + camera_points.get(3).get(0,0)[0]) / 4;
-        double y1 = (camera_points.get(0).get(0,1)[0] + camera_points.get(1).get(0,1)[0]
-                + camera_points.get(2).get(0,1)[0] + camera_points.get(3).get(0,1)[0]) / 4;
-        double z1 = (camera_points.get(0).get(0,2)[0] + camera_points.get(1).get(0,2)[0]
-                + camera_points.get(2).get(0,2)[0] + camera_points.get(3).get(0,2)[0]) / 4;
-
-        double x2 = (camera_points.get(4).get(0,0)[0] + camera_points.get(5).get(0,0)[0]
-                + camera_points.get(6).get(0,0)[0] + camera_points.get(7).get(0,0)[0]) / 4;
-        double y2 = (camera_points.get(4).get(0,1)[0] + camera_points.get(5).get(0,1)[0]
-                + camera_points.get(6).get(0,1)[0] + camera_points.get(7).get(0,1)[0]) / 4;
-        double z2 = (camera_points.get(4).get(0,2)[0] + camera_points.get(5).get(0,2)[0]
-                + camera_points.get(6).get(0,2)[0] + camera_points.get(7).get(0,2)[0]) / 4;
-
-        double distance = Math.sqrt(Math.pow(x2-x1, 2) + Math.pow(y2-y1, 2) + Math.pow(z2-z1, 2));
-
-        Toast.makeText(getApplicationContext(),"The distance is " + distance,Toast.LENGTH_SHORT).show();
     }
 }
