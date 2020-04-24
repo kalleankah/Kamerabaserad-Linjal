@@ -2,15 +2,9 @@ package com.example.opencv_contrib_test;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import android.app.Activity;
-import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.hardware.camera2.CameraAccessException;
-import android.hardware.camera2.CameraCharacteristics;
-import android.hardware.camera2.CameraManager;
-import android.hardware.camera2.params.StreamConfigurationMap;
 import android.net.Uri;
 import android.os.Bundle;
 import android.provider.MediaStore;
@@ -24,21 +18,26 @@ import org.opencv.android.OpenCVLoader;
 import org.opencv.android.Utils;
 import org.opencv.aruco.DetectorParameters;
 import org.opencv.aruco.Dictionary;
+import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.Scalar;
 
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import static org.opencv.aruco.Aruco.DICT_6X6_50;
 import static org.opencv.aruco.Aruco.detectMarkers;
+import static org.opencv.aruco.Aruco.drawAxis;
 import static org.opencv.aruco.Aruco.drawDetectedMarkers;
 import static org.opencv.aruco.Aruco.drawMarker;
+import static org.opencv.aruco.Aruco.estimatePoseSingleMarkers;
 import static org.opencv.aruco.Aruco.getPredefinedDictionary;
+import static org.opencv.calib3d.Calib3d.Rodrigues;
+import static org.opencv.calib3d.Calib3d.drawFrameAxes;
 import static org.opencv.imgproc.Imgproc.COLOR_BGRA2BGR;
 import static org.opencv.imgproc.Imgproc.cvtColor;
 
@@ -48,6 +47,8 @@ public class MainActivity extends AppCompatActivity {
     ImageView imgView;
     private static final int PICK_IMAGE = 100;
     Uri imageUri;
+    Mat cameraMatrix;
+    Mat distCoeff;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -64,7 +65,23 @@ public class MainActivity extends AppCompatActivity {
 
         dictionary = getPredefinedDictionary(DICT_6X6_50); // Define which dictionary we use
 
-        getCameraCharacteristics();
+        // Skapa kamera-matrisen
+        cameraMatrix = new Mat(3,3, CvType.CV_32F);
+
+        // Följande värden är alternativa värden för kameramatrisen som vi testat,
+        // men det är troligen de som är nu som är rätt för våra telefoner
+        // 349.3601,0,258.0883,0,349.7267,210.5905,0,0,1
+        // 1365.8452f, 0, 957.5208f, 0, 1364.1266f, 539.8947f, 0, 0, 1
+        // 455.28177f, 0, 318.84027f, 0, 454.70886f, 239.63158f, 0, 0, 1
+        cameraMatrix = new Mat(3,3, CvType.CV_32F);
+        float[] intrinsics = {1365.8452f, 0, 957.5208f, 0, 1364.1266f, 539.8947f, 0, 0, 1};
+        cameraMatrix.put(0, 0, intrinsics);
+
+        // 0.3363400302339669, -1.095918772105208, 0.001395881531710981, -0.00113269394288377, 1.487878827052818
+        // Skapa matrisen med distortionskoefficienterna
+        distCoeff = new Mat(1,5, CvType.CV_32F);
+        float[] distortion = {0, 0, 0, 0, 0}; // 8.4e-03f, -1.6e-01f ,1.4e-03f, -3.9e-03f, 1.3e-01f
+        distCoeff.put(0, 0, distortion);
 
         Button buttonLoadImage = (Button) findViewById(R.id.buttonLoadPicture);
         buttonLoadImage.setOnClickListener(new View.OnClickListener() {
@@ -75,35 +92,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-
-        //Mat image = createMarker();                       // Create a marker
-        //displayMarker(image);                             // Display an image
-    }
-
-    /* Funktion för att få ut kameraparametrarna som behövs för att få 3D-koordinater */
-    private void getCameraCharacteristics() {
-        //Activity activity = getActivity();
-        Activity activity = this;
-        CameraManager manager = (CameraManager) activity.getSystemService(Context.CAMERA_SERVICE);
-        if(manager == null) {
-            Log.d("manager", "Manager is null");
-        }
-        try {
-            assert manager != null;
-            for (String cameraId : manager.getCameraIdList()) {
-                CameraCharacteristics characteristics
-                        = manager.getCameraCharacteristics(cameraId);
-
-                float[] lensDistortionCoefficients = characteristics.get(CameraCharacteristics.LENS_INTRINSIC_CALIBRATION);
-                Log.d("Distortion", "Lens distortion coefficients : " + Arrays.toString(lensDistortionCoefficients));
-
-                float[] distortion = characteristics.get(CameraCharacteristics.LENS_DISTORTION);
-                Log.d("Distortion", "Lens distortion coefficients : " + Arrays.toString(distortion));
-
-            }
-        } catch (CameraAccessException e) {
-            e.printStackTrace();
-        }
     }
 
     // Function that allows the user to choose an image from the gallery
@@ -138,21 +126,13 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private Mat createMarker() {
-        Mat markerImage = new Mat();    // Create a mat
-        drawMarker(dictionary, 23, 1000, markerImage, 1);   // Create the marker and put it in markerImage
-        //imwrite("marker23.png", markerImage);
-
-        return markerImage;
-    }
-
     private void displayMarker(Mat image) {
         Bitmap result = Bitmap.createBitmap(image.cols(), image.rows(), Bitmap.Config.ARGB_8888);   // Make a bitmap
         Utils.matToBitmap(image, result);   // Make the input Mat image into a bitmap
         imgView.setImageBitmap(result);     // Put the image in the ImageView
     }
 
-
+    // This function is currently called OnActivityResult() which is called from selectImage()
     private void detectMarker(Bitmap bitmap) throws FileNotFoundException {
 
         // Create a Mat and copy the input Bitmap into it
@@ -163,14 +143,6 @@ public class MainActivity extends AppCompatActivity {
         // This is a must since ArUco need the image to have three color channels in order to work
         Mat image = new Mat();
         cvtColor(originalImage, image, COLOR_BGRA2BGR);
-
-        /* This code below is an alternative to the two lines above, don't know which solution is
-        better and are therefor keeping this as well for now. Both work equally well, so the question
-        is just if one is more effective than the other.
-
-        Mat image = new Mat();
-        Bitmap bmp = bitmap.copy(Bitmap.Config.ARGB_8888, true);
-        Utils.bitmapToMat(bmp, image); */
 
         // Set parameters for the detectMarkers function
         // These are needed for the function to work
@@ -189,35 +161,130 @@ public class MainActivity extends AppCompatActivity {
         // This might not be necessary but is maybe a good practice???
         Mat outputImage = image.clone();
 
-        double[] id1 = ids.get(0,0);
-        double[] id2 = ids.get(3,0);
-
         // If any markers have been detected, draw the square around it and store it in outputImage
         if(corners.size() > 0){
-            drawDetectedMarkers(outputImage, corners, ids);
+            //drawDetectedMarkers(outputImage, corners, ids);
 
-            if(corners.size() > 3) {
-                Mat corner1 = corners.get(0);
-                double[] xy10 = corner1.get(0,0);
-                double[] xy11 = corner1.get(0,1);
-                double[] xy12 = corner1.get(0,2);
-                Mat corner2 = corners.get(3);
-                double[] xy21 = corner2.get(0,1);
-                double[] xy23 = corner2.get(0,3);
+            // The length of one side of a marker in meters in reality.
+            // For now this is defined in the code, but the user should
+            // be able to write in this value?
+            float marker_length_m = 0.04f;
 
-                double[] middle1 = {(xy10[0] + xy12[0])/2, (xy10[1] + xy12[1])/2};
-                double[] middle2 = {(xy21[0] + xy23[0])/2, (xy21[1] + xy23[1])/2};
+            // Create empty matrices for the rotation vector and the translation vector
+            Mat rvecs = new Mat();
+            Mat tvecs = new Mat();
 
-                double pixel_width = Math.sqrt(Math.pow(xy11[0] - xy10[0], 2) + Math.pow(xy11[1] - xy10[1], 2));
+            // Estimate pose and get rvecs and tvecs
+            estimatePoseSingleMarkers(corners, marker_length_m, cameraMatrix, distCoeff, rvecs, tvecs);
 
-                double distance = Math.sqrt(Math.pow(middle2[0] - middle1[0], 2) + Math.pow(middle2[1] - middle1[1], 2));
-                double distanceIn_mm = distance*50/pixel_width;
-                //Toast.makeText(getApplicationContext(), "1: " + id1[0] + " 2: " + id2[0],Toast.LENGTH_SHORT).show();
-                Toast.makeText(getApplicationContext(),"The distance is " + distanceIn_mm,Toast.LENGTH_SHORT).show();
+            // If there are two (or more) markers in the image, calculate the distance
+            // from middle to middle for the first two markers
+            if(corners.size() > 1) {
+
+                List<Mat> camera_points = new ArrayList<>(); // Matrix to fill with the 3D-coordinates in the camera coordinate system
+                float half_side = marker_length_m / 2; // The length of half the size of a marker
+
+                //Create empty matrices to fill
+                Mat rvec = new Mat(1,1, CvType.CV_64FC3);
+                Mat tvec = new Mat(1,1, CvType.CV_64FC3);
+                Mat rot_mat = new Mat(3,3,CvType.CV_64F);
+
+                // When there are than one markers in the image, another row is added to rvecs and
+                // tvecs for each marker. Therefore, we need to take out one row (one marker) at the time.
+                // The for-loop only goes to two right now so that we only calculate the distance between two markers,
+                // once we've figured out how we want to do with the case of more than two markers in an image we
+                // might want to change from 2 to corners.size()
+                for(int i = 0; i < 2; i++) {
+                    // Get rvec and tvec for the current marker from rvecs and tvecs
+                    rvec.put(0,0, rvecs.get(i,0));
+                    tvec.put(0,0, tvecs.get(i,0));
+                    Rodrigues(rvec, rot_mat);       // This must be done on rvec to make it into a 3x3 rotation matrix
+
+                    rot_mat = rot_mat.t();
+
+                    // To understand this, best look at https://stackoverflow.com/questions/46363618/aruco-markers-with-opencv-get-the-3d-corner-coordinates
+                    // Width is E and Height is F
+                    double Width_1 = rot_mat.get(0,0)[0] * half_side;
+                    double Width_2 = rot_mat.get(0,1)[0] * half_side;
+                    double Width_3 = rot_mat.get(0,2)[0] * half_side;
+
+                    double Height_1 = rot_mat.get(1,0)[0] * half_side;
+                    double Height_2 = rot_mat.get(1,1)[0] * half_side;
+                    double Height_3 = rot_mat.get(1,2)[0] * half_side;
+
+                    // First corner
+                    double corner_x = -Width_1 + Height_1 + tvec.get(0,0)[0];
+                    double corner_y = -Width_2 + Height_2 + tvec.get(0,0)[1];
+                    double corner_z = -Width_3 + Height_3 + tvec.get(0,0)[2];
+
+                    // Add to matrix
+                    double[] corner_coord = {corner_x, corner_y, corner_z};
+                    Mat camera_points_coords_0 = new Mat(1,3,CvType.CV_64F);
+                    camera_points_coords_0.put(0, 0, corner_coord);
+                    camera_points.add(camera_points_coords_0);
+
+                    // Second corner
+                    corner_x = Width_1 + Height_1 + tvec.get(0,0)[0];
+                    corner_y = Width_2 + Height_2 + tvec.get(0,0)[1];
+                    corner_z = Width_3 + Height_3 + tvec.get(0,0)[2];
+
+                    // Add to camera points matrix
+                    corner_coord[0] = corner_x; corner_coord[1] = corner_y; corner_coord[2] = corner_z;
+                    Mat camera_points_coords_1 = new Mat(1,3,CvType.CV_64F);
+                    camera_points_coords_1.put(0, 0, corner_coord);
+                    camera_points.add(camera_points_coords_1);
+
+                    // Third corner
+                    corner_x = Width_1 - Height_1 + tvec.get(0,0)[0];
+                    corner_y = Width_2 - Height_2 + tvec.get(0,0)[1];
+                    corner_z = Width_3 - Height_3 + tvec.get(0,0)[2];
+
+                    // Add to camera points matrix
+                    corner_coord[0] = corner_x; corner_coord[1] = corner_y; corner_coord[2] = corner_z;
+                    Mat camera_points_coords_2 = new Mat(1,3,CvType.CV_64F);
+                    camera_points_coords_2.put(0, 0, corner_coord);
+                    camera_points.add(camera_points_coords_2);
+
+                    // Fourth corner
+                    corner_x = -Width_1 - Height_1 + tvec.get(0,0)[0];
+                    corner_y = -Width_2 - Height_2 + tvec.get(0,0)[1];
+                    corner_z = -Width_3 - Height_3 + tvec.get(0,0)[2];
+
+                    // Add to camera points matrix
+                    corner_coord[0] = corner_x; corner_coord[1] = corner_y; corner_coord[2] = corner_z;
+                    Mat camera_points_coords_3 = new Mat(1,3,CvType.CV_64F);
+                    camera_points_coords_3.put(0, 0, corner_coord);
+                    camera_points.add(camera_points_coords_3);
+                }
+
+                if(camera_points.size() == 8) {
+                    calculateDistance(camera_points);
+                }
+
             }
         }
 
         // Display the output image
         displayMarker(outputImage);
+    }
+
+    private void calculateDistance(List<Mat> camera_points) {
+        double x1 = (camera_points.get(0).get(0,0)[0] + camera_points.get(1).get(0,0)[0]
+                + camera_points.get(2).get(0,0)[0] + camera_points.get(3).get(0,0)[0]) / 4;
+        double y1 = (camera_points.get(0).get(0,1)[0] + camera_points.get(1).get(0,1)[0]
+                + camera_points.get(2).get(0,1)[0] + camera_points.get(3).get(0,1)[0]) / 4;
+        double z1 = (camera_points.get(0).get(0,2)[0] + camera_points.get(1).get(0,2)[0]
+                + camera_points.get(2).get(0,2)[0] + camera_points.get(3).get(0,2)[0]) / 4;
+
+        double x2 = (camera_points.get(4).get(0,0)[0] + camera_points.get(5).get(0,0)[0]
+                + camera_points.get(6).get(0,0)[0] + camera_points.get(7).get(0,0)[0]) / 4;
+        double y2 = (camera_points.get(4).get(0,1)[0] + camera_points.get(5).get(0,1)[0]
+                + camera_points.get(6).get(0,1)[0] + camera_points.get(7).get(0,1)[0]) / 4;
+        double z2 = (camera_points.get(4).get(0,2)[0] + camera_points.get(5).get(0,2)[0]
+                + camera_points.get(6).get(0,2)[0] + camera_points.get(7).get(0,2)[0]) / 4;
+
+        double distance = Math.sqrt(Math.pow(x2-x1, 2) + Math.pow(y2-y1, 2) + Math.pow(z2-z1, 2));
+
+        Toast.makeText(getApplicationContext(),"The distance is " + distance,Toast.LENGTH_SHORT).show();
     }
 }
