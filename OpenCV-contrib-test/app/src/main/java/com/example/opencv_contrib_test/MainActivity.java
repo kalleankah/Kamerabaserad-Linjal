@@ -106,24 +106,24 @@ public class MainActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
 
         if (resultCode == RESULT_OK && requestCode == PICK_IMAGE){
-          imageUri = data.getData();  // Get the filepath the the chosen image
+            imageUri = data.getData();  // Get the filepath the the chosen image
 
-          InputStream imageStream = null;   // Create an imageStream
-          try {
-              imageStream = getContentResolver().openInputStream(imageUri); // Get the image from the imageURI
-              Bitmap yourSelectedImage = BitmapFactory.decodeStream(imageStream);   // Create a bitmap with the image
-              assert imageStream != null;   // Make sure that the imageStream is not null, then close it
-              imageStream.close();
+            InputStream imageStream = null;   // Create an imageStream
+            try {
+                imageStream = getContentResolver().openInputStream(imageUri); // Get the image from the imageURI
+                Bitmap yourSelectedImage = BitmapFactory.decodeStream(imageStream);   // Create a bitmap with the image
+                assert imageStream != null;   // Make sure that the imageStream is not null, then close it
+                imageStream.close();
 
-              try {
-                  detectMarker(yourSelectedImage);  //Try detecting markers in the chosen image
-              } catch (FileNotFoundException e) {
-                  e.printStackTrace();
-              }
+                try {
+                    detectMarker(yourSelectedImage);  //Try detecting markers in the chosen image
+                } catch (FileNotFoundException e) {
+                    e.printStackTrace();
+                }
 
-          } catch (IOException e) {
-              e.printStackTrace();
-          }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
         }
     }
 

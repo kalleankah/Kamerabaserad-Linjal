@@ -4,8 +4,9 @@ import android.util.Log;
 
 class MarkerContainer {
     private float[][] markerCorners2D;
+    private double distance = 0;
     private int numMarkers = 0;
-    long lastDetection = System.nanoTime();
+    private long lastDetection = System.nanoTime();
 
     public float[][] getMarkerCorners(){
         return markerCorners2D;
@@ -30,5 +31,18 @@ class MarkerContainer {
     public void makeEmpty(){
         numMarkers = 0;
         markerCorners2D = null;
+        distance = 0;
+    }
+
+    public void setDistance(double d){
+        distance = d;
+    }
+
+    public double getDistance() {
+        return distance;
+    }
+
+    public void clearDistance(){
+        distance = 0;
     }
 }
