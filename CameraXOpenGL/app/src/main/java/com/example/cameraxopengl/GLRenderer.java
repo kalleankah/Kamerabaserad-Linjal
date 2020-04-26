@@ -103,6 +103,7 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
 
     @Override
     public void analyze(@NonNull ImageProxy proxy) {
+        long analyzeTime = System.currentTimeMillis();
         Bitmap bitmap = toBitmap(proxy);
         proxy.close();
 
@@ -113,6 +114,7 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
         setImage(bitmap);
 
         glSurfaceView.requestRender();
+        Log.d("Analysis time", "" + (int) (System.currentTimeMillis() - analyzeTime) + "ms");
     }
 
     // Asynchronously detect ArUco markers by executing an instance of MarkerDetector in the background
@@ -126,7 +128,7 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
     // Detect markers on the same thread
     // Camera preview is not rendered until we know the marker coordinates
     private void markerDetectionSynchronized(Bitmap bitmap) {
-        long lastDetection = System.nanoTime();
+//        long lastDetection = System.currentTimeMillis();
 
         int width = bitmap.getWidth();
         int height = bitmap.getHeight();
@@ -217,12 +219,37 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
             markerContainer.makeEmpty();
         }
 
-        Log.d("Detection fps", "" + (int) (1000 / ((System.nanoTime() - lastDetection)/1000000.0)) + "fps");
+//        Log.d("Detection time", "" + (int) (System.currentTimeMillis() - lastDetection) + "ms");
     }
 
     private synchronized void setImage (Bitmap frame){
         image.recycle();
         image = frame;
+    }
+
+    private Bitmap toBitmap(@NotNull ImageProxy image) {
+//        long timer = System.currentTimeMillis();
+        int width = image.getWidth();
+        int height = image.getHeight();
+
+        // The image data is stored in YUV_420_888 and needs to be converted to RGB to make a bitmap
+        assert(image.getFormat() == ImageFormat.YUV_420_888);
+        // yPlane and yMat contain luminance data
+        // uvPlane and uvMat contain color data
+        ByteBuffer yPlane = image.getPlanes()[0].getBuffer();
+        ByteBuffer uvPlane = image.getPlanes()[2].getBuffer();
+        Mat yMat = new Mat(height, width, CvType.CV_8UC1, yPlane);
+        Mat uvMat = new Mat(height / 2, width / 2, CvType.CV_8UC2, uvPlane);
+        // Use OpenCV image processor to convert from YUV to RGB
+        Mat rgbaMat = new Mat();
+        Imgproc.cvtColorTwoPlane(yMat, uvMat, rgbaMat, Imgproc.COLOR_YUV2RGBA_NV21);
+
+        // Convert Mat to Bitmap
+        Bitmap outputBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Utils.matToBitmap(rgbaMat, outputBitmap);
+
+//        Log.d("Bitmap conversion time", "" + (int)(System.currentTimeMillis() - timer) + "ms");
+        return outputBitmap;
     }
 
     private void generateShader() {
@@ -254,28 +281,4 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
         GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, image, 0);
     }
 
-    private Bitmap toBitmap(@NotNull ImageProxy image) {
-        long timer = System.nanoTime();
-        int width = image.getWidth();
-        int height = image.getHeight();
-
-        // The image data is stored in YUV_420_888 and needs to be converted to RGB to make a bitmap
-        assert(image.getFormat() == ImageFormat.YUV_420_888);
-        // yPlane and yMat contain luminance data
-        // uvPlane and uvMat contain color data
-        ByteBuffer yPlane = image.getPlanes()[0].getBuffer();
-        ByteBuffer uvPlane = image.getPlanes()[2].getBuffer();
-        Mat yMat = new Mat(height, width, CvType.CV_8UC1, yPlane);
-        Mat uvMat = new Mat(height / 2, width / 2, CvType.CV_8UC2, uvPlane);
-        // Use OpenCV image processor to convert from YUV to RGB
-        Mat rgbaMat = new Mat();
-        Imgproc.cvtColorTwoPlane(yMat, uvMat, rgbaMat, Imgproc.COLOR_YUV2RGBA_NV21);
-
-        // Convert Mat to Bitmap
-        Bitmap outputBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        Utils.matToBitmap(rgbaMat, outputBitmap);
-
-        Log.d("Bitmap conversion time", "" + (int)((System.nanoTime() - timer)/1000000.0) + "ms");
-        return outputBitmap;
-    }
 }

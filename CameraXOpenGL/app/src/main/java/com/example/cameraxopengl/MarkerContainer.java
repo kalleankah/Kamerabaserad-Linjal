@@ -6,7 +6,7 @@ class MarkerContainer {
     private float[][] markerCorners2D;
     private double distance = 0;
     private int numMarkers = 0;
-    private long lastDetection = System.nanoTime();
+    private long lastDetection = System.currentTimeMillis();
 
     public float[][] getMarkerCorners(){
         return markerCorners2D;
@@ -15,9 +15,9 @@ class MarkerContainer {
     public void setMarkerCorners(float[][] m){
         markerCorners2D = m;
         numMarkers = markerCorners2D.length;
-        long newDetection = System.nanoTime();
-        Log.d("Detection time", "" + (int) ((newDetection - lastDetection)/1000000.0) + "ms");
-        lastDetection = newDetection;
+//        long newDetection = System.currentTimeMillis();
+//        Log.d("Detection time", "" + (int) (newDetection - lastDetection) + "ms");
+//        lastDetection = newDetection;
     }
 
     public int getNumMarkers(){
