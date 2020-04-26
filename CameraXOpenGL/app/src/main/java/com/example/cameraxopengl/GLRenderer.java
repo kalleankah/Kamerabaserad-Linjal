@@ -5,6 +5,7 @@ import android.graphics.BitmapFactory;
 import android.graphics.ImageFormat;
 import android.graphics.Rect;
 import android.graphics.YuvImage;
+import android.media.Image;
 import android.opengl.GLES20;
 import android.opengl.GLSurfaceView;
 import android.opengl.GLUtils;
@@ -19,6 +20,7 @@ import org.opencv.android.Utils;
 import org.opencv.aruco.DetectorParameters;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.imgproc.Imgproc;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
@@ -37,6 +39,8 @@ import static org.opencv.aruco.Aruco.detectMarkers;
 import static org.opencv.aruco.Aruco.estimatePoseSingleMarkers;
 import static org.opencv.aruco.Aruco.getPredefinedDictionary;
 import static org.opencv.imgproc.Imgproc.COLOR_BGRA2BGR;
+import static org.opencv.imgproc.Imgproc.COLOR_GRAY2BGR;
+import static org.opencv.imgproc.Imgproc.COLOR_GRAY2RGBA;
 import static org.opencv.imgproc.Imgproc.cvtColor;
 
 // The class GLRenderer implements a custom GLSurfaceView.Renderer to handle rendering to a
@@ -103,8 +107,8 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
         proxy.close();
 
         // USE EITHER ASYNCHRONOUS OR SYNCHRONOUS MARKER DETECTION
-        markerDetectionAsynchronous(bitmap);
-//        markerDetectionSynchronized(bitmap);
+//        markerDetectionAsynchronous(bitmap);
+        markerDetectionSynchronized(bitmap);
 
         setImage(bitmap);
 
@@ -252,29 +256,26 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
 
     private Bitmap toBitmap(@NotNull ImageProxy image) {
         long timer = System.nanoTime();
+        int width = image.getWidth();
+        int height = image.getHeight();
 
-        ImageProxy.PlaneProxy[] planes = image.getPlanes();
-        ByteBuffer yBuffer = planes[0].getBuffer();
-        ByteBuffer uBuffer = planes[1].getBuffer();
-        ByteBuffer vBuffer = planes[2].getBuffer();
+        // The image data is stored in YUV_420_888 and needs to be converted to RGB to make a bitmap
+        assert(image.getFormat() == ImageFormat.YUV_420_888);
+        // yPlane and yMat contain luminance data
+        // uvPlane and uvMat contain color data
+        ByteBuffer yPlane = image.getPlanes()[0].getBuffer();
+        ByteBuffer uvPlane = image.getPlanes()[2].getBuffer();
+        Mat yMat = new Mat(height, width, CvType.CV_8UC1, yPlane);
+        Mat uvMat = new Mat(height / 2, width / 2, CvType.CV_8UC2, uvPlane);
+        // Use OpenCV image processor to convert from YUV to RGB
+        Mat rgbaMat = new Mat();
+        Imgproc.cvtColorTwoPlane(yMat, uvMat, rgbaMat, Imgproc.COLOR_YUV2RGBA_NV21);
 
-        int ySize = yBuffer.remaining();
-        int uSize = uBuffer.remaining();
-        int vSize = vBuffer.remaining();
+        // Convert Mat to Bitmap
+        Bitmap outputBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
+        Utils.matToBitmap(rgbaMat, outputBitmap);
 
-        byte[] nv21 = new byte[ySize + uSize + vSize];
-        //U and V are swapped
-        yBuffer.get(nv21, 0, ySize);
-        vBuffer.get(nv21, ySize, vSize);
-        uBuffer.get(nv21, ySize + vSize, uSize);
-
-        YuvImage yuvImage = new YuvImage(nv21, ImageFormat.NV21, image.getWidth(), image.getHeight(), null);
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        yuvImage.compressToJpeg(new Rect(0, 0, yuvImage.getWidth(), yuvImage.getHeight()), 75, out);
-
-        byte[] imageBytes = out.toByteArray();
-        Bitmap bm = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.length);
         Log.d("Bitmap conversion time", "" + (int)((System.nanoTime() - timer)/1000000.0) + "ms");
-        return bm;
+        return outputBitmap;
     }
 }
