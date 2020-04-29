@@ -1,48 +1,68 @@
 package com.example.cameraxopengl;
 
-import android.util.Log;
-
 class MarkerContainer {
     private float[][] markerCorners2D;
     private double distance = 0;
     private int numMarkers = 0;
-    private long lastDetection = System.currentTimeMillis();
+    private float[] depths = new float[2];
 
-    public float[][] getMarkerCorners(){
+    float[][] getMarkerCorners(){
         return markerCorners2D;
     }
 
-    public void setMarkerCorners(float[][] m){
+    void setMarkerCorners(float[][] m){
         markerCorners2D = m;
         numMarkers = markerCorners2D.length;
-//        long newDetection = System.currentTimeMillis();
-//        Log.d("Detection time", "" + (int) (newDetection - lastDetection) + "ms");
-//        lastDetection = newDetection;
     }
 
-    public int getNumMarkers(){
+    int getNumMarkers(){
         return numMarkers;
     }
 
-    public boolean isNotEmpty(){
+    boolean isNotEmpty(){
         return numMarkers > 0;
     }
 
-    public void makeEmpty(){
+    void makeEmpty(){
         numMarkers = 0;
         markerCorners2D = null;
-        distance = 0;
+        clearDistance();
+        clearDepths();
     }
 
-    public void setDistance(double d){
+    void setDistance(double d){
         distance = d;
     }
 
-    public double getDistance() {
+    double getDistance() {
         return distance;
     }
 
-    public void clearDistance(){
+    void clearDistance(){
         distance = 0;
+    }
+
+    void setDepths(float v1, float v2) {
+        depths[0] = v1;
+        depths[1] = v2;
+    }
+
+    void clearDepths() {
+        depths[0] = 0;
+        depths[1] = 0;
+    }
+
+    float[] getDepths() {
+        return depths;
+    }
+
+    float[] getMarkerMidpoint(int markerIndex){
+        assert(markerIndex < numMarkers);
+        float x0 = markerCorners2D[markerIndex][0];
+        float y0 = markerCorners2D[markerIndex][1];
+        float x1 = markerCorners2D[markerIndex][4];
+        float y1 = markerCorners2D[markerIndex][5];
+
+        return new float[]{ (x0+x1)/2, (y0+y1)/2 };
     }
 }
