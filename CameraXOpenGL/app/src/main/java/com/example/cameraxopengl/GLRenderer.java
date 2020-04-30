@@ -45,6 +45,7 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
     private GLSurfaceView glSurfaceView;
     private int[] textures = {0};
     private Bitmap image;
+    private float markerLength;
     private Shader shader;
     private MarkerContainer markerContainer = new MarkerContainer();
     private ExecutorService executor;
@@ -98,6 +99,7 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
 //                shader.drawThinLine(markerContainer.getMarkerMidpoint(0), markerContainer.getMarkerMidpoint(1));
             }
         }
+
     }
 
     @Override
@@ -182,9 +184,6 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
             // Create empty matrices for the rotation vector and the translation vector
             Mat rvecs = new Mat();
             Mat tvecs = new Mat();
-
-            // TODO Marker length should be selected in runtime using the GUI
-            float markerLength = 50f;
 
             // Estimate pose and get rvecs and tvecs
             estimatePoseSingleMarkers(corners, markerLength, cameraMatrix, distortionCoefficients, rvecs, tvecs);
@@ -271,6 +270,10 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
         );
 
         GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, image, 0);
+    }
+
+    void setMarkerSize(float v){
+        markerLength = v;
     }
 
 }
