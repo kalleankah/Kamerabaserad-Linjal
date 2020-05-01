@@ -1,12 +1,15 @@
 package com.example.cameraxopengl;
 
 import android.graphics.Bitmap;
+import android.util.Log;
 import android.widget.Toast;
 
 import org.opencv.android.Utils;
 import org.opencv.aruco.DetectorParameters;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.Point;
+import org.opencv.core.Scalar;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -17,6 +20,7 @@ import static org.opencv.aruco.Aruco.estimatePoseSingleMarkers;
 import static org.opencv.aruco.Aruco.getPredefinedDictionary;
 import static org.opencv.imgproc.Imgproc.COLOR_BGRA2BGR;
 import static org.opencv.imgproc.Imgproc.cvtColor;
+import static org.opencv.imgproc.Imgproc.putText;
 
 // MarkerDetector handles ArUco marker detection. It takes a MarkerContainer and a Bitmap as input.
 // If it finds markers, their corners are stored in the MarkerContainer.

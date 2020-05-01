@@ -91,7 +91,7 @@ public class MainActivity extends AppCompatActivity {
                 //If new camera frames are delivered faster than the analysis is done, skip frames
                 // in between and only perform analysis on the most recent frame.
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .setTargetResolution(new Size(1280, 720))
+                .setTargetResolution(new Size(540, 960))
                 .build();
 
         // Run analysis on a new executor thread. The object "renderer" is an instance of the custom
