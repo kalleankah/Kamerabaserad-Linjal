@@ -53,6 +53,7 @@ class Shader {
 
     // Allocate buffers for the vertices
     private void initializeBuffers() {
+        GLES20.glLineWidth(10f);
         ByteBuffer buff = ByteBuffer.allocateDirect(screenVertices.length * 4);
         buff.order(ByteOrder.nativeOrder());
         screenVerticesBuffer = buff.asFloatBuffer();

@@ -116,10 +116,14 @@ class MarkerDetector implements Runnable {
                 Mat tvec2 = new Mat(1,1, CvType.CV_64FC3);
                 tvec2.put(0,0,tvecs.get(1,0));
 
+                // Todo: klistra
+
                 double distance = Math.sqrt(Math.pow(tvec1.get(0, 0)[0] - tvec2.get(0, 0)[0], 2)
                         + Math.pow(tvec1.get(0, 0)[1] - tvec2.get(0, 0)[1], 2)
                         + Math.pow(tvec1.get(0, 0)[2] - tvec2.get(0, 0)[2], 2));
-
+                // TODO: [0, 1, 2] berättar om x, y, z
+                // TODO: y-axeln är flippad i 2D (dvs. kanske i 3D) *(-1)
+                // TODO: resultat är vektorer, alt. om vi får fram ett antal punkter i planet som får agera som hörn
                 markerContainer.setDistance(distance);
             }
             else{

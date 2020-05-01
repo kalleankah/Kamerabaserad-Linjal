@@ -6,6 +6,8 @@ import android.opengl.GLSurfaceView;
 import android.os.Bundle;
 import android.util.Log;
 import android.util.Size;
+import android.widget.Button;
+import android.widget.EditText;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.CameraSelector;
@@ -54,6 +56,7 @@ public class MainActivity extends AppCompatActivity {
         // Start the camera and bind its lifecycle to the glSurfaceView object. The camera is alive
         // as long as the glSurfaceView object is alive
         glSurfaceView.post(this::startCamera);
+
     }
 
     private void checkCameraPermission() {
@@ -91,7 +94,8 @@ public class MainActivity extends AppCompatActivity {
                 //If new camera frames are delivered faster than the analysis is done, skip frames
                 // in between and only perform analysis on the most recent frame.
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .setTargetResolution(new Size(1280, 720))
+                //.setTargetResolution(new Size(1280, 720))
+                .setTargetResolution(new Size(1080, 1920))
                 .build();
 
         // Run analysis on a new executor thread. The object "renderer" is an instance of the custom
