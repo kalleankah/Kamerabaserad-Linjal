@@ -4,10 +4,15 @@ import android.Manifest;
 import android.content.pm.PackageManager;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.util.Log;
 import android.util.Size;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.EditText;
+import android.widget.NumberPicker;
+import android.widget.TextView;
 
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.camera.core.CameraSelector;
@@ -27,7 +32,7 @@ import java.util.concurrent.Executors;
 // It also creates a GLRenderer object which provides a custom GLSurfaceView.Renderer for the
 // glSurfaceView and an ImageAnalysis.Analyzer to analyze each camera frame.
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements NumberPicker.OnValueChangeListener {
     private GLRenderer renderer;
 
     @Override
@@ -49,6 +54,14 @@ public class MainActivity extends AppCompatActivity {
 
         // Only perform a render when data in the glSurfaceView has updated
         glSurfaceView.setRenderMode(GLSurfaceView.RENDERMODE_WHEN_DIRTY);
+
+        // Create a text field to enter marker size
+        NumberPicker markerSizeInput = findViewById(R.id.marker_size_input);
+        markerSizeInput.setMinValue(1);
+        markerSizeInput.setMaxValue(1000);
+        markerSizeInput.setValue(50);
+        markerSizeInput.setOnValueChangedListener(this);
+        renderer.setMarkerSize(markerSizeInput.getValue());
 
         checkCameraPermission();
         loadOpenCV();
@@ -112,5 +125,10 @@ public class MainActivity extends AppCompatActivity {
                 e.printStackTrace();
             }
         }, ContextCompat.getMainExecutor(this));
+    }
+
+    @Override
+    public void onValueChange(NumberPicker picker, int oldVal, int newVal) {
+        renderer.setMarkerSize((float) newVal);
     }
 }

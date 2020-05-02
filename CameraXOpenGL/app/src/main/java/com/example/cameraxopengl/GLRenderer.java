@@ -61,6 +61,7 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
     private int[] textures = {0};
     private Bitmap image;
     private Mat img;
+    private float markerLength;
     private Shader shader;
     private MarkerContainer markerContainer = new MarkerContainer();
     private ExecutorService executor;
@@ -112,26 +113,20 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
         // Draw markers (if found) on top of the preview
         if(markerContainer.isNotEmpty()){
             shader.drawMarkerGL(markerContainer.getMarkerCorners());
+            
             Log.d("Distance" , "" +  markerContainer.getDistance() + " m");
+            
+            // If two markers are found
+            if(markerContainer.getNumMarkers() >= 2){
+                shader.drawLine(markerContainer.getMarkerMidpoint(0), markerContainer.getMarkerMidpoint(1), markerContainer.getDepths());
+//                shader.drawThinLine(markerContainer.getMarkerMidpoint(0), markerContainer.getMarkerMidpoint(1));
+            }
         }
+
     }
 
     @Override
     public void analyze(@NonNull ImageProxy proxy) {
-        /*
-        long analyzeTime = System.currentTimeMillis();
-        Bitmap bitmap = toBitmap(proxy);
-        proxy.close();
-
-        // USE EITHER ASYNCHRONOUS OR SYNCHRONOUS MARKER DETECTION
-//        markerDetectionAsynchronous(bitmap);
-        markerDetectionSynchronized(bitmap);
-
-        setImage(bitmap);
-
-        glSurfaceView.requestRender();
-        Log.d("Analysis time", "" + (int) (System.currentTimeMillis() - analyzeTime) + "ms");
-        */
         long analyzeTime = System.currentTimeMillis();
         Bitmap bitmap = toBitmap(proxy);
         proxy.close();
@@ -195,15 +190,12 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
         List<Mat> corners = new ArrayList<>();  // Create a list of Mats to store the corners of the markers
         Mat ids = new Mat();                    // Create a Mat to store all the ids of the markers
 
-        // Define detector parameters
-        DetectorParameters detectorParameters = DetectorParameters.create();
-//        detectorParameters.set_adaptiveThreshWinSizeMax(400);
-
         // Detect the markers in the image and store their corners and ids in the corresponding variables
-        detectMarkers(img, getPredefinedDictionary(DICT_6X6_50), corners, ids, detectorParameters);
+        detectMarkers(image, getPredefinedDictionary(DICT_6X6_50), corners, ids);
 
         // Om vi har någon markör i bild
-        if(corners.size() > 0){
+        int numMarkers = corners.size();
+        if(numMarkers > 0){
             /****************************
              * FÖR ATT RITA UT MARKÖREN *
              ****************************/
@@ -211,23 +203,15 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
             float[][] markerCorners2D = new float[corners.size()][8];
 
             // Hittar alla hörnkoordinater som texturkoordinater på skärmen (för utritning senare)
-            for(int i = 0; i < corners.size(); ++i){
+            for(int i = 0; i < numMarkers; ++i){
                 // i is the index of the marker
                 Mat marker = corners.get(i);
 
-                // Put corners in the order OpenGL expects them. Note that the Y-axis is flipped
-                // Corner 1 - Bottom Left
-                markerCorners2D[i][0] = (float) (marker.get(0,0)[0] * 2.0 / width - 1);
-                markerCorners2D[i][1] = (float) -(marker.get(0,0)[1] * 2.0 / height - 1);
-                // Corner 2 - Bottom Right
-                markerCorners2D[i][2] = (float) (marker.get(0,1)[0] * 2.0 / width - 1);
-                markerCorners2D[i][3] = (float) -(marker.get(0,1)[1] * 2.0 / height - 1);
-                // Corner 3 - Top Left
-                markerCorners2D[i][4] = (float) (marker.get(0,2)[0] * 2.0 / width - 1);
-                markerCorners2D[i][5] = (float) -(marker.get(0,2)[1] * 2.0 / height - 1);
-                // Corner 4 - Top Right
-                markerCorners2D[i][6] = (float) (marker.get(0,3)[0] * 2.0 / width - 1);
-                markerCorners2D[i][7] = (float) -(marker.get(0,3)[1] * 2.0 / height - 1);
+                // Put corners in clockwise order. Note that the Y-axis is flipped
+                for(int j = 0; j < 4; ++j){
+                    markerCorners2D[i][2*j] = (float) (marker.get(0,j)[0] * 2.0 / width - 1);
+                    markerCorners2D[i][2*j+1] = (float) -(marker.get(0,j)[1] * 2.0 / height - 1);
+                }
             }
 
             // Skickar hörnkoordinaterna till MarkerContainer så de kan ritas ut
@@ -254,9 +238,6 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
             // Create empty matrices for the rotation vector and the translation vector
             Mat rvecs = new Mat();
             Mat tvecs = new Mat();
-
-            // Set the real length of the marker (in m) -- hämtas från en annan klass i nya version
-            float markerLength = 0.05f;
 
             // Estimate pose and get rvecs and tvecs
             estimatePoseSingleMarkers(corners, markerLength, cameraMatrix, distortionCoefficients, rvecs, tvecs);
@@ -532,7 +513,7 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
             // * Se till så att koden vet vilket hörn som är vilken markör
 
             // Mäter avstånd
-            if(corners.size() == 2){
+            if(numMarkers == 2){
                 //Calculate cx, cy based on image resolution
                 /*
                 float cx = width * 0.49904564092f;
@@ -548,37 +529,46 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
                 Mat distortionCoefficients = new Mat(1,5, CvType.CV_32F);
                 distortionCoefficients.put(0, 0, distortion);
 
-                // Create empty matrices for the rotation vector and the translation vector
-                Mat rvecs = new Mat();
-                Mat tvecs = new Mat();
+            // Construct the camera matrix using fx, fy, cx, cy
+            float[] intrinsics = {fx, 0, cx, 0, fy, cy, 0, 0, 1};
+            Mat cameraMatrix = new Mat(3,3, CvType.CV_32F);
+            cameraMatrix.put(0, 0, intrinsics);
 
-                float markerLength = 50f;
+            // Assign distortion coefficients (currently empty)
+            float[] distortion = {0, 0, 0, 0, 0};
+            Mat distortionCoefficients = new Mat(1,5, CvType.CV_32F);
+            distortionCoefficients.put(0, 0, distortion);
 
-                // Estimate pose and get rvecs and tvecs
-                estimatePoseSingleMarkers(corners, markerLength, cameraMatrix, distortionCoefficients, rvecs, tvecs);
-                */
+            // Estimate pose and get rvecs and tvecs
+            estimatePoseSingleMarkers(corners, markerLength, cameraMatrix, distortionCoefficients, rvecs, tvecs);
+            */
 
-                Mat tvec1 = new Mat(1,1, CvType.CV_64FC3);
-                tvec1.put(0,0,tvecs.get(0,0));
 
-                Mat tvec2 = new Mat(1,1, CvType.CV_64FC3);
-                tvec2.put(0,0,tvecs.get(1,0));
+            // Estimate pose and get rvecs and tvecs
+            estimatePoseSingleMarkers(corners, markerLength, cameraMatrix, distortionCoefficients, rvecs, tvecs);
 
-                double distance = Math.sqrt(Math.pow(tvec1.get(0, 0)[0] - tvec2.get(0, 0)[0], 2)
-                        + Math.pow(tvec1.get(0, 0)[1] - tvec2.get(0, 0)[1], 2)
-                        + Math.pow(tvec1.get(0, 0)[2] - tvec2.get(0, 0)[2], 2));
+            // If exactly two markers are detected, measure the distance between them
+            if(numMarkers == 2){
+                double[] marker1Coords = tvecs.get(0,0);
+                double[] marker2Coords = tvecs.get(1,0);
+
+                // Calculate the distance between marker 1 and marker 2
+                double distance = Math.sqrt(
+                        (marker1Coords[0]-marker2Coords[0])*(marker1Coords[0]-marker2Coords[0]) +
+                        (marker1Coords[1]-marker2Coords[1])*(marker1Coords[1]-marker2Coords[1]) +
+                        (marker1Coords[2]-marker2Coords[2])*(marker1Coords[2]-marker2Coords[2]));
 
                 markerContainer.setDistance(distance);
-
+                markerContainer.setDepths((float) marker1Coords[2], (float) marker2Coords[2]);
             }
             else{
                 markerContainer.clearDistance();
+                markerContainer.clearDepths();
             }
         }
         else{
             markerContainer.makeEmpty();
         }
-
 //        Log.d("Detection time", "" + (int) (System.currentTimeMillis() - lastDetection) + "ms");
     }
 
@@ -639,6 +629,10 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
         );
 
         GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, image, 0);
+    }
+
+    void setMarkerSize(float v){
+        markerLength = v;
     }
 
 }
