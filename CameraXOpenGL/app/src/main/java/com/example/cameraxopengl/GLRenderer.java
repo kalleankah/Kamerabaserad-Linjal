@@ -13,9 +13,10 @@ import androidx.camera.core.ImageProxy;
 
 import org.jetbrains.annotations.NotNull;
 import org.opencv.android.Utils;
-import org.opencv.aruco.DetectorParameters;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.Point;
+import org.opencv.core.Scalar;
 import org.opencv.imgproc.Imgproc;
 
 import java.nio.ByteBuffer;
@@ -33,8 +34,11 @@ import static org.opencv.aruco.Aruco.DICT_6X6_50;
 import static org.opencv.aruco.Aruco.detectMarkers;
 import static org.opencv.aruco.Aruco.estimatePoseSingleMarkers;
 import static org.opencv.aruco.Aruco.getPredefinedDictionary;
+import static org.opencv.core.Core.ROTATE_90_CLOCKWISE;
+import static org.opencv.core.Core.rotate;
 import static org.opencv.imgproc.Imgproc.COLOR_BGRA2BGR;
 import static org.opencv.imgproc.Imgproc.cvtColor;
+import static org.opencv.imgproc.Imgproc.putText;
 
 // The class GLRenderer implements a custom GLSurfaceView.Renderer to handle rendering to a
 // GLSurfaceView. It also provides an ImageAnalysis.Analyzer to perform image analysis on each
@@ -44,18 +48,19 @@ import static org.opencv.imgproc.Imgproc.cvtColor;
 class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
     private GLSurfaceView glSurfaceView;
     private int[] textures = {0};
-    private Bitmap image;
     private float markerLength;
     private Shader shader;
     private MarkerContainer markerContainer = new MarkerContainer();
     private ExecutorService executor;
+    private Bitmap imageBitmap;
+    private Mat imageMat;
 
     // Constructor that sets up the
-    GLRenderer(GLSurfaceView view){
+    GLRenderer(GLSurfaceView view, int cameraPreviewWidth, int cameraPreviewHeight){
         glSurfaceView = view;
 
         // Create an empty bitmap to place in the glSurfaceView until the first frame is rendered
-        image = Bitmap.createBitmap(1, 1, Bitmap.Config.ARGB_8888);
+        imageBitmap = Bitmap.createBitmap(cameraPreviewWidth, cameraPreviewHeight, Bitmap.Config.ARGB_8888);
 
         // Set up the executor to handle Marker Detection in the background
         int poolsize = 1; int queuesize = 1;
@@ -96,23 +101,30 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
             // If two markers are found
             if(markerContainer.getNumMarkers() >= 2){
                 shader.drawLine(markerContainer.getMarkerMidpoint(0), markerContainer.getMarkerMidpoint(1), markerContainer.getDepths());
-//                shader.drawThinLine(markerContainer.getMarkerMidpoint(0), markerContainer.getMarkerMidpoint(1));
             }
         }
-
     }
 
     @Override
     public void analyze(@NonNull ImageProxy proxy) {
         long analyzeTime = System.currentTimeMillis();
-        Bitmap bitmap = toBitmap(proxy);
+        // imageMat gets assigned
+        setImageMatFromProxy(proxy);
         proxy.close();
 
-        setImage(bitmap);
-
         // USE EITHER ASYNCHRONOUS OR SYNCHRONOUS MARKER DETECTION
-//        markerDetectionAsynchronous(bitmap);
-        markerDetectionSynchronized(bitmap);
+//        markerDetectionAsynchronous();
+        markerDetectionSynchronized();
+
+        // Draw marker distance
+        if(imageMat != null){
+            putText(imageMat, (int)markerContainer.getDistance() + "mm" , new Point(0, imageMat.height()), 1, 2, new Scalar(255, 0, 0), 2, 8);
+            Bitmap bm = Bitmap.createBitmap(imageMat.cols(), imageMat.rows(), Bitmap.Config.ARGB_8888);
+            setImageBitmapFromMat(imageMat);
+        }
+        else{
+            setImageBitmapFromMat();
+        }
 
         glSurfaceView.requestRender();
         Log.d("Analysis time", "" + (int) (System.currentTimeMillis() - analyzeTime) + "ms");
@@ -121,31 +133,20 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
     // Asynchronously detect ArUco markers by executing an instance of MarkerDetector in the background
     // Camera preview is rendered regardless if marker coordinates are found.
     // If markers are found, they will be rendered the next time onDrawFrame() is called
-    private void markerDetectionAsynchronous(Bitmap bitmap) {
+    private void markerDetectionAsynchronous() {
         // The executor needs to work on a copy of the bitmap to prevent it from being recycled
-        executor.execute(new MarkerDetector(bitmap.copy(bitmap.getConfig(), false), markerContainer));
+        executor.execute(new MarkerDetector(imageMat.clone(), markerContainer, markerLength));
     }
 
     // Detect markers on the same thread
     // Camera preview is not rendered until we know the marker coordinates
-    private void markerDetectionSynchronized(Bitmap bitmap) {
+    private void markerDetectionSynchronized() {
 //        long lastDetection = System.currentTimeMillis();
-
-        int width = bitmap.getWidth();
-        int height = bitmap.getHeight();
-
-        // Create a Mat and copy the input Bitmap into it
-        Mat image = new Mat(height, width, CvType.CV_8UC3);
-        Utils.bitmapToMat(bitmap, image);
-
-        // Remove the alpha channel
-        cvtColor(image, image, COLOR_BGRA2BGR);
-
         List<Mat> corners = new ArrayList<>();  // Create a list of Mats to store the corners of the markers
         Mat ids = new Mat();                    // Create a Mat to store all the ids of the markers
 
         // Detect the markers in the image and store their corners and ids in the corresponding variables
-        detectMarkers(image, getPredefinedDictionary(DICT_6X6_50), corners, ids);
+        detectMarkers(imageMat, getPredefinedDictionary(DICT_6X6_50), corners, ids);
 
         int numMarkers = corners.size();
         if(numMarkers > 0){
@@ -158,18 +159,18 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
 
                 // Put corners in clockwise order. Note that the Y-axis is flipped
                 for(int j = 0; j < 4; ++j){
-                    markerCorners2D[i][2*j] = (float) (marker.get(0,j)[0] * 2.0 / width - 1);
-                    markerCorners2D[i][2*j+1] = (float) -(marker.get(0,j)[1] * 2.0 / height - 1);
+                    markerCorners2D[i][2*j] = (float) (marker.get(0,j)[0] * 2.0 / imageMat.width() - 1);
+                    markerCorners2D[i][2*j+1] = (float) -(marker.get(0,j)[1] * 2.0 / imageMat.height() - 1);
                 }
             }
 
             markerContainer.setMarkerCorners(markerCorners2D);
 
             //Calculate fx, fy, cx, and cy based on image resolution
-            float cx = width * 0.49904564092f;
-            float cy = height * 0.49937073486f;
-            float fx = width * 0.67352064836f;
-            float fy = height * 1.19671093141f;
+            float cx = imageMat.width() * 0.49904564092f;
+            float cy = imageMat.height() * 0.49937073486f;
+            float fx = imageMat.width() * 0.67352064836f;
+            float fy = imageMat.height() * 1.19671093141f;
 
             // Construct the camera matrix using fx, fy, cx, cy
             float[] intrinsics = {fx, 0, cx, 0, fy, cy, 0, 0, 1};
@@ -213,34 +214,42 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
 //        Log.d("Detection time", "" + (int) (System.currentTimeMillis() - lastDetection) + "ms");
     }
 
-    private synchronized void setImage (Bitmap frame){
-        image.recycle();
-        image = frame;
-    }
-
-    private Bitmap toBitmap(@NotNull ImageProxy image) {
+    private void setImageMatFromProxy(@NotNull ImageProxy proxy) {
 //        long timer = System.currentTimeMillis();
-        int width = image.getWidth();
-        int height = image.getHeight();
 
         // The image data is stored in YUV_420_888 and needs to be converted to RGB to make a bitmap
-        assert(image.getFormat() == ImageFormat.YUV_420_888);
+        assert(proxy.getFormat() == ImageFormat.YUV_420_888);
         // yPlane and yMat contain luminance data
         // uvPlane and uvMat contain color data
-        ByteBuffer yPlane = image.getPlanes()[0].getBuffer();
-        ByteBuffer uvPlane = image.getPlanes()[2].getBuffer();
-        Mat yMat = new Mat(height, width, CvType.CV_8UC1, yPlane);
-        Mat uvMat = new Mat(height / 2, width / 2, CvType.CV_8UC2, uvPlane);
+        ByteBuffer yPlane = proxy.getPlanes()[0].getBuffer();
+        ByteBuffer uvPlane = proxy.getPlanes()[2].getBuffer();
+        Mat yMat = new Mat(proxy.getHeight(), proxy.getWidth(), CvType.CV_8UC1, yPlane);
+        Mat uvMat = new Mat(proxy.getHeight() / 2, proxy.getWidth() / 2, CvType.CV_8UC2, uvPlane);
+
         // Use OpenCV image processor to convert from YUV to RGB
         Mat rgbaMat = new Mat();
         Imgproc.cvtColorTwoPlane(yMat, uvMat, rgbaMat, Imgproc.COLOR_YUV2RGBA_NV21);
 
-        // Convert Mat to Bitmap
-        Bitmap outputBitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888);
-        Utils.matToBitmap(rgbaMat, outputBitmap);
+        // TODO is this necessary??
+        // Remove the alpha channel
+        cvtColor(rgbaMat, rgbaMat, COLOR_BGRA2BGR);
+
+        // Rotate Mat 90 degrees
+        rotate(rgbaMat, rgbaMat, ROTATE_90_CLOCKWISE);
+
+        imageMat = rgbaMat;
 
 //        Log.d("Bitmap conversion time", "" + (int)(System.currentTimeMillis() - timer) + "ms");
-        return outputBitmap;
+    }
+
+    private void setImageBitmapFromMat(){
+        // Convert Mat to Bitmap
+        Utils.matToBitmap(imageMat, imageBitmap);
+    }
+
+    private void setImageBitmapFromMat(Mat _mat){
+        // Convert Mat to Bitmap
+        Utils.matToBitmap(_mat, imageBitmap);
     }
 
     private void generateShader() {
@@ -269,7 +278,7 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
                 GLES20.GL_CLAMP_TO_EDGE
         );
 
-        GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, image, 0);
+        GLUtils.texImage2D(GLES20.GL_TEXTURE_2D, 0, imageBitmap, 0);
     }
 
     void setMarkerSize(float v){

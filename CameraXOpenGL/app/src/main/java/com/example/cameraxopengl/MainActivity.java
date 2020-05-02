@@ -32,6 +32,8 @@ import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity implements NumberPicker.OnValueChangeListener {
     private GLRenderer renderer;
+    private int cameraPreviewWidth = 720;
+    private int cameraPreviewHeight = 1280;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -43,7 +45,7 @@ public class MainActivity extends AppCompatActivity implements NumberPicker.OnVa
 
         // "renderer" is an instance of the custom class GLRenderer which implements a
         // GLSurfaceView.Renderer and an ImageAnalysis.Analyzer
-        renderer = new GLRenderer(glSurfaceView);
+        renderer = new GLRenderer(glSurfaceView, cameraPreviewWidth, cameraPreviewHeight);
         glSurfaceView.setPreserveEGLContextOnPause(true);
         glSurfaceView.setEGLContextClientVersion(3);
 
@@ -104,7 +106,7 @@ public class MainActivity extends AppCompatActivity implements NumberPicker.OnVa
                 //If new camera frames are delivered faster than the analysis is done, skip frames
                 // in between and only perform analysis on the most recent frame.
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .setTargetResolution(new Size(1280, 720))
+                .setTargetResolution(new Size(720, 1280))
                 .build();
 
         // Run analysis on a new executor thread. The object "renderer" is an instance of the custom

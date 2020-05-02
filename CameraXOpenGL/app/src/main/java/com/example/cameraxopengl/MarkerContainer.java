@@ -65,4 +65,13 @@ class MarkerContainer {
 
         return new float[]{ (x0+x1)/2, (y0+y1)/2 };
     }
+
+    float[] getLineCenter(){
+        assert(numMarkers >= 2);
+
+        float x = (getMarkerMidpoint(0)[0] + getMarkerMidpoint(1)[0]) / 2;
+        float y = (getMarkerMidpoint(0)[1] + getMarkerMidpoint(1)[1]) / 2;
+
+        return new float[] {x, y};
+    }
 }

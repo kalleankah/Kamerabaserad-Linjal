@@ -179,7 +179,7 @@ class Shader {
         // starting point
         @SuppressWarnings("SuspiciousNameCombination") vec2 perpendicularLineStart = new vec2(line.y, -line.x);
         perpendicularLineStart.normalizeVec();
-        perpendicularLineStart.scale((float) 1024.0 /(depth[0]*depth[0]));
+        perpendicularLineStart.scale((float) 512f /(depth[0]*depth[0]));
 
         // Create two vertices each a bit apart from the center and widen the line
         vec2[] startVertices = {
@@ -191,7 +191,7 @@ class Shader {
         // end point
         @SuppressWarnings("SuspiciousNameCombination") vec2 perpendicularLineEnd = new vec2(line.y, -line.x);
         perpendicularLineEnd.normalizeVec();
-        perpendicularLineEnd.scale((float) 1024.0 /(depth[1]*depth[1]));
+        perpendicularLineEnd.scale((float) 512f /(depth[1]*depth[1]));
 
         // Widen the line at the end point by perpendicularLineEnd in each direction
         vec2[] endVertices = {
