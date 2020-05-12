@@ -1,6 +1,7 @@
 package com.example.cameraxopengl;
 
 import android.Manifest;
+import android.content.ContentProviderClient;
 import android.content.pm.PackageManager;
 import android.opengl.GLSurfaceView;
 import android.os.Bundle;
@@ -8,7 +9,11 @@ import android.text.Editable;
 import android.text.TextWatcher;
 import android.util.Log;
 import android.util.Size;
+import android.view.MotionEvent;
+import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.NumberPicker;
 import android.widget.TextView;
 
@@ -18,6 +23,7 @@ import androidx.camera.core.ImageAnalysis;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.view.MotionEventCompat;
 
 import com.google.common.util.concurrent.ListenableFuture;
 
@@ -32,8 +38,11 @@ import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity implements NumberPicker.OnValueChangeListener {
     private GLRenderer renderer;
-    private int cameraPreviewWidth = 720;
-    private int cameraPreviewHeight = 1280;
+    //private int cameraPreviewWidth = 720;
+    //private int cameraPreviewHeight = 1280;
+    private int cameraPreviewWidth = 1080;
+    private int cameraPreviewHeight = 1920;
+    boolean userPoint = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -62,6 +71,47 @@ public class MainActivity extends AppCompatActivity implements NumberPicker.OnVa
         markerSizeInput.setValue(50);
         markerSizeInput.setOnValueChangedListener(this);
         renderer.setMarkerSize(markerSizeInput.getValue());
+
+        // Get user interaction coordinates
+        glSurfaceView.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (MotionEventCompat.getActionMasked(event) == event.ACTION_UP) {
+                    int point_x = (int) event.getX();
+                    int point_y = (int) event.getY();
+                    Log.d("MotionEvent", "[ " + point_x + ", " + point_y + " ]");
+                    renderer.pxToWC(point_x, point_y);
+                    return true;
+                }
+
+                return true;
+            }
+        });
+
+
+        final Button placePointButton = findViewById(R.id.placePoint);
+        placePointButton.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                // TODO: I mån av tid, lås hjulet
+                renderer.placePoint();
+            }
+        });
+
+        final Button showInputButton = findViewById(R.id.infoButton);
+        final LinearLayout markerSizeBox = findViewById(R.id.markerSizeBox);
+
+        showInputButton.setOnClickListener(new View.OnClickListener() {
+            public void onClick(View v) {
+                if (markerSizeBox.getVisibility() == View.VISIBLE) {
+                    markerSizeBox.setVisibility(View.INVISIBLE);
+                    showInputButton.setText("Set Marker Size");
+                }
+                else {
+                    markerSizeBox.setVisibility(View.VISIBLE);
+                    showInputButton.setText("Close");
+                }
+            }
+        });
 
         checkCameraPermission();
         loadOpenCV();
@@ -106,9 +156,9 @@ public class MainActivity extends AppCompatActivity implements NumberPicker.OnVa
                 //If new camera frames are delivered faster than the analysis is done, skip frames
                 // in between and only perform analysis on the most recent frame.
                 .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
-                .setTargetResolution(new Size(720, 1280))
+                //.setTargetResolution(new Size(720, 1280))
+                .setTargetResolution(new Size(cameraPreviewWidth, cameraPreviewHeight))
                 .build();
-
         // Run analysis on a new executor thread. The object "renderer" is an instance of the custom
         // class GLRenderer which implements an image analyzer function
         imageAnalysis.setAnalyzer(Executors.newSingleThreadExecutor(), renderer);

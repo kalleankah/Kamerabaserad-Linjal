@@ -1,5 +1,9 @@
 package com.example.cameraxopengl;
 
+import org.opencv.core.Mat;
+
+import java.util.List;
+
 class MarkerContainer {
     private float[][] markerCorners2D;
     private double distance = 0;
@@ -10,9 +14,21 @@ class MarkerContainer {
         return markerCorners2D;
     }
 
-    void setMarkerCorners(float[][] m){
-        markerCorners2D = m;
-        numMarkers = markerCorners2D.length;
+    void setMarkerCorners(List<Mat> listOfCorners, int screenWidth, int screenHeight) {
+        // Each marker has 4 corners with 2 coordinates each -> 8 floats per corner
+        numMarkers = listOfCorners.size();
+        markerCorners2D = new float[numMarkers][8];
+
+        for (int i = 0; i < numMarkers; ++i) {
+            // i is the index of the marker
+            Mat marker = listOfCorners.get(i);
+
+            // Put corners in clockwise order. Note that the Y-axis is flipped
+            for (int j = 0; j < 4; ++j) {
+                markerCorners2D[i][2 * j] = (float) (marker.get(0, j)[0] * 2.0 / screenWidth - 1);
+                markerCorners2D[i][2 * j + 1] = (float) -(marker.get(0, j)[1] * 2.0 / screenHeight - 1);
+            }
+        }
     }
 
     int getNumMarkers(){
@@ -21,6 +37,10 @@ class MarkerContainer {
 
     boolean isNotEmpty(){
         return numMarkers > 0;
+    }
+
+    boolean isEmpty() {
+        return numMarkers <= 0;
     }
 
     void makeEmpty(){

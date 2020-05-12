@@ -85,7 +85,7 @@ class Shader {
         int fragmentShaderGeometry = GLES20.glCreateShader(GLES20.GL_FRAGMENT_SHADER);
         String fragmentShaderGeometryCode = "precision mediump float;" +
                 "void main() {" +
-                "  gl_FragColor = vec4(0.0, 1.0, 0.0, 1.0);" +
+                "  gl_FragColor = vec4(1.0, 0.4, 0.0, 1.0);" +                                     // <- Linjefärg (RGBA)
                 "}";
         GLES20.glShaderSource(fragmentShaderGeometry, fragmentShaderGeometryCode);
         GLES20.glCompileShader(fragmentShaderGeometry);
