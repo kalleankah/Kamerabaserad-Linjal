@@ -577,6 +577,7 @@ class GLRenderer implements GLSurfaceView.Renderer, ImageAnalysis.Analyzer {
         // Rotate Mat 90 degrees
         rotate(rgbaMat, rgbaMat, ROTATE_90_CLOCKWISE);
 
+        if(imageMat != null){ imageMat.release(); }
         imageMat = rgbaMat;
 
 //        Log.d("Bitmap conversion time", "" + (int)(System.currentTimeMillis() - timer) + "ms");
